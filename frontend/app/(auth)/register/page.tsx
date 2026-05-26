@@ -91,7 +91,7 @@ export default function RegisterPage() {
             <img 
               src={`https://chart.googleapis.com/chart?chs=160x160&cht=qr&chl=${encodeURIComponent(onboarding.qrCodeUri)}&choe=UTF-8`} 
               alt="Google 2FA Onboarding QR Code" 
-              className="w-[160px] h-[160px] rounded-[--radius-md] border border-[--border-strong] p-1 bg-white mb-3"
+              className="w-[160px] h-[160px] rounded-[--radius-md] border border-[--border] p-1 bg-[--bg-surface] mb-3"
             />
             <p className="text-[10px] text-[--text-muted]">
               Can't scan? Key: <code className="text-[--accent-light] font-mono select-all bg-[--bg-surface] px-1.5 py-0.5 rounded">{onboarding.secret}</code>
