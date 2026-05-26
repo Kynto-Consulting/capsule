@@ -23,6 +23,7 @@ resource "aws_lb_target_group" "traefik" {
 
   health_check {
     path                = "/ping"
+    port                = "8082"
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
