@@ -31,20 +31,20 @@ resource "aws_acm_certificate" "capsule" {
   }
 }
 
-# Target group → EC2 Traefik on port 80
-resource "aws_lb_target_group" "traefik" {
-  name     = "${var.app_name}-traefik"
-  port     = 80
+# Target group → frontend on port 3000
+resource "aws_lb_target_group" "frontend" {
+  name     = "${var.app_name}-frontend"
+  port     = 3000
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
 
   health_check {
-    path                = "/ping"
-    port                = "8082"
+    path                = "/"
+    port                = "3000"
     protocol            = "HTTP"
-    matcher             = "200"
+    matcher             = "200-399"
     interval            = 30
-    timeout             = 5
+    timeout             = 10
     healthy_threshold   = 2
     unhealthy_threshold = 3
   }
@@ -56,10 +56,41 @@ resource "aws_lb_target_group" "traefik" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "builder" {
-  target_group_arn = aws_lb_target_group.traefik.arn
+resource "aws_lb_target_group_attachment" "frontend" {
+  target_group_arn = aws_lb_target_group.frontend.arn
   target_id        = aws_instance.builder.id
-  port             = 80
+  port             = 3000
+}
+
+# Target group → backend on port 8080
+resource "aws_lb_target_group" "backend" {
+  name     = "${var.app_name}-backend"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/api/v1/health"
+    port                = "8080"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 10
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "capsule"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "backend" {
+  target_group_arn = aws_lb_target_group.backend.arn
+  target_id        = aws_instance.builder.id
+  port             = 8080
 }
 
 # HTTP → HTTPS redirect
@@ -84,7 +115,7 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# HTTPS listener — forwards to Traefik, ALB terminates TLS
+# HTTPS listener — routes by hostname
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.capsule.arn
   port              = 443
@@ -92,15 +123,50 @@ resource "aws_lb_listener" "https" {
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   certificate_arn   = aws_acm_certificate.capsule.arn
 
+  # Default: forward to frontend
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.traefik.arn
+    target_group_arn = aws_lb_target_group.frontend.arn
   }
 
   tags = {
     Environment = var.environment
     ManagedBy   = "terraform"
     Project     = "capsule"
+  }
+}
+
+# app.tumi-ai.com → frontend (port 3000)
+resource "aws_lb_listener_rule" "app" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+
+  condition {
+    host_header {
+      values = ["app.tumi-ai.com"]
+    }
+  }
+}
+
+# api.tumi-ai.com → backend (port 8080)
+resource "aws_lb_listener_rule" "api" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 20
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.tumi-ai.com"]
+    }
   }
 }
 
