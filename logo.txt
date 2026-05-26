@@ -1,0 +1,44 @@
+CAPSULE LOGO — AI Generation Prompt
+=====================================
+
+Product: Capsule — self-hosted cloud infrastructure platform
+Tagline: "Your infrastructure, encapsulated"
+
+--- PROMPT FOR IMAGE AI (Midjourney / DALL-E / Ideogram) ---
+
+A minimalist geometric logo icon for a developer infrastructure platform called "Capsule".
+
+Concept: An abstract capsule/pill shape constructed from thin grid lines or orthogonal paths,
+suggesting containment, precision, and cloud infrastructure. Inside the capsule, faint
+circuit-like or grid subdivision lines create a sense of structure. The outer shape is a
+rounded rectangle (pill/capsule form), not a circle.
+
+Alternative concept: A 3D isometric capsule with subtle grid lines on its surface, slight
+depth/shadow, giving it a "contained world" feeling.
+
+Style:
+- Flat or very subtly 3D
+- Precision / technical / modern SaaS
+- Inspired by: Linear, Vercel, Railway logos
+- No text or lettermarks — pure icon mark
+- Works at 16x16 (favicon) up to 512x512 (app icon)
+- Clean enough to be monochrome
+
+Colors:
+- Primary: deep violet #7c3aed
+- Highlight: soft violet #a78bfa
+- Optional: white lines on dark (#05050f) background
+- OR: dark violet icon on transparent background
+
+What to AVOID:
+- Generic cloud shapes, server racks, or network node icons
+- Busy or complex compositions
+- Gradients that don't simplify well at small sizes
+- Lettermark "C" — pure shape preferred
+
+Output format: SVG or PNG with transparent background, square canvas.
+
+--- SVG FALLBACK (text-based placeholder) ---
+Shape: Rounded rectangle (rx=8) with inner horizontal divider line + small vertical grid
+Proportions: 1:1 square, icon fills ~80% of canvas
+Stroke: 1.5-2px, stroke-linecap: round
