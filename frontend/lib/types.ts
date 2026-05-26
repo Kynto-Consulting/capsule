@@ -70,3 +70,33 @@ export interface ListResponse<T> {
   data: T[]
   meta: { page: number; per_page: number; total: number }
 }
+
+export interface Database {
+  id: string
+  project_id: string
+  name: string
+  engine: string
+  version: string
+  host: string
+  port: number
+  db_name: string
+  status: string
+  size_mb: number
+  connection_url?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DomainRecord {
+  id: string
+  project_id: string
+  domain_name: string
+  record_type: string
+  record_value: string
+  status: string
+  ssl_enabled: boolean
+  dns_provider: string
+  verified_at?: string
+  created_at: string
+  updated_at: string
+}

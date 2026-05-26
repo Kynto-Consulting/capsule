@@ -181,7 +181,7 @@ function DeploymentTable({ deployments }: { deployments: FlatDeployment[] }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-      <div className="w-10 h-10 rounded-[--radius-lg] bg-[--bg-raised] border border-[--border] flex items-center justify-center">
+      <div className="w-10 h-10 rounded-[--radius-lg] bg-[--bg-raised] flex items-center justify-center">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
         </svg>

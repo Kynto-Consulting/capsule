@@ -12,6 +12,7 @@ import { formatRelative, slugify } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs, createOrg } from '@/lib/orgs'
 import { listProjects, createProject } from '@/lib/projects'
+import { api } from '@/lib/api'
 import type { Organization } from '@/lib/types'
 
 const runtimeColors: Record<string, string> = {
@@ -99,6 +100,9 @@ export default function ProjectsPage() {
             />
           )}
 
+          {/* AWS Credits and Cost Widget */}
+          <AWSBillingWidget token={token} />
+
           {/* Grid */}
           {projectsLoading ? (
             <div className="flex items-center justify-center h-48"><PageSpinner /></div>
@@ -122,9 +126,9 @@ export default function ProjectsPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-[4px] ${runtimeColors[project.runtime] ?? 'bg-[--bg-overlay] text-[--text-muted]'}`}>
                         {project.runtime || 'auto'}
                       </span>
-                      <div className="flex items-center gap-3 text-[11px] text-[--text-muted]">
-                        <span>{project.replicas}× replica{project.replicas !== 1 ? 's' : ''}</span>
-                        <span>{formatRelative(project.updated_at)}</span>
+                      <div className="flex items-center justify-between mt-auto pt-2 border-t border-[--border]" style={{ borderTop: 'none', paddingTop: 0 }}>
+                        <span className="text-[11px] text-[--text-muted]" style={{ marginRight: '12px' }}>{project.replicas}× replica{project.replicas !== 1 ? 's' : ''}</span>
+                        <span className="text-[11px] text-[--text-muted]">{formatRelative(project.updated_at)}</span>
                       </div>
                     </div>
                   </Card>
@@ -146,6 +150,73 @@ export default function ProjectsPage() {
         </>
       )}
     </div>
+  )
+}
+
+function AWSBillingWidget({ token }: { token: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['aws-billing'],
+    queryFn: async () => {
+      const res = await api.get<{
+        total_spend: number
+        currency: string
+        period: string
+        remaining_credits: number
+        credit_expiration: string
+        active_resources: {
+          app_servers: number
+          rds_databases: number
+          s3_buckets: number
+          custom_domains: number
+        }
+      }>('/api/v1/aws/billing')
+      return res
+    }
+  })
+
+  if (isLoading || !data) return null
+
+  const pct = (data.remaining_credits / 1000.0) * 100
+
+  return (
+    <Card className="p-5 mb-6 bg-[rgba(255,255,255,0.01)] border-[rgba(255,255,255,0.05)] shadow-[0_4px_30px_rgba(0,0,0,0.4)] backdrop-blur-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[--text-muted]">AWS Spend & Credits</h3>
+          <div className="flex items-baseline gap-4 mt-2">
+            <div>
+              <p className="text-2xl font-bold text-[--text-primary] font-mono">${data.total_spend.toFixed(2)}</p>
+              <p className="text-[10px] text-[--text-muted]">Monthly Spend ({data.period})</p>
+            </div>
+            <div className="h-8 w-[1px] bg-[--border] self-center" />
+            <div>
+              <p className="text-2xl font-bold text-[--accent-light] font-mono">${data.remaining_credits.toFixed(2)}</p>
+              <p className="text-[10px] text-[--text-muted]">Remaining Credits (Exp: {data.credit_expiration})</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar & Resources */}
+        <div className="flex-1 max-w-md">
+          <div className="flex justify-between text-[10px] text-[--text-secondary] mb-1 font-mono">
+            <span>Credits Consumption</span>
+            <span>{pct.toFixed(1)}% remaining</span>
+          </div>
+          <div className="w-full h-1.5 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden border border-[rgba(255,255,255,0.02)]">
+            <div 
+              className="h-full bg-gradient-to-r from-[--accent-dim] to-[--accent-light] rounded-full transition-all duration-500" 
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex gap-4 mt-3 text-[10px] text-[--text-muted]">
+            <span>🖥️ {data.active_resources.app_servers} Serverless Apps</span>
+            <span>💾 {data.active_resources.rds_databases} Databases</span>
+            <span>🪣 {data.active_resources.s3_buckets} Buckets</span>
+            <span>🌐 {data.active_resources.custom_domains} Domains</span>
+          </div>
+        </div>
+      </div>
+    </Card>
   )
 }
 

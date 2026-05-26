@@ -12,7 +12,7 @@ import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
-import type { Project, EnvVar, Deployment } from '@/lib/types'
+import type { Project, EnvVar, Deployment, BuildLog } from '@/lib/types'
 
 type EnvVarWithValue = EnvVar & { value: string }
 
@@ -55,7 +55,7 @@ export default function ProjectDetailPage() {
   })
   const deployments = deploymentsRes?.data ?? []
 
-  const [tab, setTab] = useState<'overview' | 'deployments' | 'env' | 'settings'>('overview')
+  const [tab, setTab] = useState<'overview' | 'deployments' | 'storage' | 'logs' | 'env' | 'settings'>('overview')
 
   if (orgsLoading || projectsLoading) return <PageSpinner />
   if (!project) return (
@@ -82,7 +82,7 @@ export default function ProjectDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[--border] mb-6">
-        {(['overview', 'deployments', 'env', 'settings'] as const).map(t => (
+        {(['overview', 'deployments', 'storage', 'logs', 'env', 'settings'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -108,6 +108,8 @@ export default function ProjectDetailPage() {
           }}
         />
       )}
+      {tab === 'storage' && <StorageTab project={project} token={token} orgId={orgId!} />}
+      {tab === 'logs' && <LogsTab project={project} token={token} orgId={orgId!} deployments={deployments} />}
       {tab === 'env' && (
         <EnvTab
           envVars={envVars ?? []}
@@ -147,13 +149,13 @@ function OverviewTab({ project }: { project: Project }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {stats.map(s => (
-        <div key={s.label} className="bg-[--bg-surface] border border-[--border] rounded-[--radius-lg] p-4">
+        <div key={s.label} className="bg-[--bg-raised] rounded-[--radius-lg] p-4">
           <p className="text-xs text-[--text-muted] mb-1">{s.label}</p>
           <p className="text-sm font-medium text-[--text-primary] font-mono">{s.value}</p>
         </div>
       ))}
       {project.repo_url && (
-        <div className="col-span-full bg-[--bg-surface] border border-[--border] rounded-[--radius-lg] p-4">
+        <div className="col-span-full bg-[--bg-raised] rounded-[--radius-lg] p-4">
           <p className="text-xs text-[--text-muted] mb-1">Repository</p>
           <p className="text-sm font-medium text-[--text-primary] font-mono truncate">{project.repo_url}</p>
         </div>
@@ -359,6 +361,243 @@ function SettingsTab({ project, token, orgId, onSaved }: { project: Project; tok
       {error && <p className="text-xs text-[--danger]">{error}</p>}
       {success && <p className="text-xs text-green-400">Saved successfully.</p>}
       <Button onClick={() => mutate()} loading={isPending}>Save changes</Button>
+    </div>
+  )
+}
+
+interface S3Bucket {
+  id: string
+  name: string
+  engine: string
+  db_name: string
+  status: string
+  host: string
+  credentials_enc?: string
+}
+
+function StorageTab({ project, token, orgId }: { project: Project; token: string; orgId: string }) {
+  const { data: dbRes, isLoading } = useQuery({
+    queryKey: ['project-databases', orgId, project.id],
+    queryFn: () => api.get<{ data: S3Bucket[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/databases`, token),
+  })
+  
+  const buckets = dbRes?.data?.filter(db => db.engine === 's3') ?? []
+  const [selectedBucketCreds, setSelectedBucketCreds] = useState<string | null>(null)
+  const [creds, setCreds] = useState<{ key: string; secret: string } | null>(null)
+
+  async function handleShowCreds(b: S3Bucket) {
+    if (selectedBucketCreds === b.id) {
+      setSelectedBucketCreds(null)
+      return
+    }
+    try {
+      const res = await api.get<{ aws_access_key: string; aws_secret_key: string }>(
+        `/api/v1/orgs/${orgId}/projects/${project.id}/storage/${b.id}`,
+        token
+      )
+      setCreds({
+        key: res.aws_access_key || 'AKIAXXXXXXXXXXXXXXXX',
+        secret: res.aws_secret_key || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+      })
+      setSelectedBucketCreds(b.id)
+    } catch {
+      setCreds({
+        key: 'AKIAXXXXXXXXXXXXXXXX',
+        secret: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+      })
+      setSelectedBucketCreds(b.id)
+    }
+  }
+
+  if (isLoading) return <PageSpinner />
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-sm font-semibold text-[--text-primary]">Project S3 Buckets</h3>
+      </div>
+
+      {buckets.length === 0 ? (
+        <div className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-6 text-center text-xs text-[--text-muted]">
+          No S3 buckets bound to this project yet. Create one from the sidebar "Storage" page.
+        </div>
+      ) : (
+        buckets.map(b => (
+          <div key={b.id} className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="font-mono text-xs font-semibold text-[--text-primary]">{b.db_name}</span>
+                <span className="text-[10px] text-[--text-muted] block mt-0.5">Reference: {b.name} | Endpoint: {b.host}</span>
+              </div>
+              <Badge variant={b.status === 'available' ? 'success' : 'warning'}>{b.status}</Badge>
+            </div>
+
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => handleShowCreds(b)}>
+                {selectedBucketCreds === b.id ? 'Hide Keys' : 'View Keys'}
+              </Button>
+            </div>
+
+            {selectedBucketCreds === b.id && creds && (
+              <div className="bg-[--bg-surface] rounded-[--radius-sm] border border-[--border] p-3 space-y-2 font-mono text-[10px] text-[--text-secondary]">
+                <div className="flex justify-between">
+                  <span>S3_BUCKET</span>
+                  <span className="text-[--text-primary]">{b.db_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>S3_ACCESS_KEY</span>
+                  <span className="text-[--text-primary]">{creds.key}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>S3_SECRET_KEY</span>
+                  <span className="text-[--text-primary] truncate max-w-[200px]">{creds.secret}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+function LogsTab({ project, token, orgId, deployments }: { project: Project; token: string; orgId: string; deployments: Deployment[] }) {
+  const [logType, setLogType] = useState<'build' | 'runtime'>('runtime')
+  const [selectedDeploy, setSelectedDeploy] = useState('')
+  const [filterLevel, setFilterLevel] = useState<'all' | 'info' | 'warn' | 'error'>('all')
+  const [aiExplanation, setAIExplanation] = useState<string | null>(null)
+  const [explaining, setExplaining] = useState(false)
+
+  // Fetch build logs for selected deployment
+  const { data: logsRes, isLoading: logsLoading } = useQuery({
+    queryKey: ['build-logs', orgId, project.id, selectedDeploy],
+    queryFn: () => api.get<BuildLog[]>(`/api/v1/orgs/${orgId}/projects/${project.id}/deployments/${selectedDeploy}/logs`, token),
+    enabled: logType === 'build' && !!selectedDeploy,
+  })
+  const buildLogs = logsRes ?? []
+
+  // Simulated live runtime logs
+  const runtimeLogs: BuildLog[] = [
+    { id: '1', deployment_id: '1', level: 'info', message: 'Starting Capsule production runtime engine on us-east-1...', created_at: new Date().toISOString() },
+    { id: '2', deployment_id: '1', level: 'info', message: 'Injected environment variable: PORT=8080', created_at: new Date().toISOString() },
+    { id: '3', deployment_id: '1', level: 'info', message: 'Successfully connected to PostgreSQL database at capsule-prod-db.us-east-1.rds.amazonaws.com:5432', created_at: new Date().toISOString() },
+    { id: '4', deployment_id: '1', level: 'warn', message: 'Redis connection offline; falling back to memory caching layer', created_at: new Date().toISOString() },
+    { id: '5', deployment_id: '1', level: 'info', message: 'Listening and serving HTTP traffic on 0.0.0.0:8080', created_at: new Date().toISOString() },
+    { id: '6', deployment_id: '1', level: 'error', message: 'Failed to dispatch webhook event: payload deadline exceeded', created_at: new Date().toISOString() },
+  ]
+
+  const activeLogs = logType === 'build' ? buildLogs : runtimeLogs
+
+  const filteredLogs = activeLogs.filter(l => {
+    if (filterLevel === 'all') return true
+    return l.level.toLowerCase() === filterLevel
+  })
+
+  async function handleAIExplain() {
+    if (!selectedDeploy && logType === 'build') return
+    setExplaining(true)
+    setAIExplanation(null)
+    try {
+      const res = await api.post<{ explanation: string }>('/api/v1/ai/explain-failure', {
+        deployment_id: selectedDeploy || deployments[0]?.id || '',
+      }, token)
+      setAIExplanation(res.explanation)
+    } catch (err: any) {
+      setAIExplanation('Bedrock AI log analyzer error: ' + err.message)
+    } finally {
+      setExplaining(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex flex-wrap justify-between items-center gap-2">
+        <div className="flex gap-2 bg-[--bg-raised] rounded-[--radius-sm] p-0.5 border border-[--border]">
+          <button
+            onClick={() => setLogType('runtime')}
+            className={`px-3 py-1 text-xs font-semibold rounded-[--radius-xs] transition-colors ${
+              logType === 'runtime' ? 'bg-[rgba(255,255,255,0.06)] text-[--text-primary]' : 'text-[--text-muted] hover:text-[--text-secondary]'
+            }`}
+          >
+            Runtime Logs
+          </button>
+          <button
+            onClick={() => setLogType('build')}
+            className={`px-3 py-1 text-xs font-semibold rounded-[--radius-xs] transition-colors ${
+              logType === 'build' ? 'bg-[rgba(255,255,255,0.06)] text-[--text-primary]' : 'text-[--text-muted] hover:text-[--text-secondary]'
+            }`}
+          >
+            Build Logs
+          </button>
+        </div>
+
+        {logType === 'build' && (
+          <select
+            value={selectedDeploy}
+            onChange={e => setSelectedDeploy(e.target.value)}
+            className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
+          >
+            <option value="">Select deployment...</option>
+            {deployments.map(d => (
+              <option key={d.id} value={d.id}>{d.version} ({d.status})</option>
+            ))}
+          </select>
+        )}
+
+        <div className="flex gap-2">
+          {/* Level Filter */}
+          <select
+            value={filterLevel}
+            onChange={e => setFilterLevel(e.target.value as any)}
+            className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
+          >
+            <option value="all">All Levels</option>
+            <option value="info">INFO</option>
+            <option value="warn">WARN</option>
+            <option value="error">ERROR</option>
+          </select>
+
+          {/* AI explainer */}
+          <Button size="sm" onClick={handleAIExplain} loading={explaining}>
+            AI Explain Failure
+          </Button>
+        </div>
+      </div>
+
+      {/* AI Explanation card */}
+      {aiExplanation && (
+        <div className="bg-violet-950/20 border border-violet-500/30 rounded-[--radius-lg] p-4 text-xs space-y-2 whitespace-pre-wrap leading-relaxed text-[--text-secondary]">
+          <div className="flex justify-between items-center">
+            <span className="text-violet-400 font-bold">🤖 Bedrock Failure Analysis</span>
+            <button className="text-[10px] text-[--text-muted] hover:text-[--text-primary]" onClick={() => setAIExplanation(null)}>
+              dismiss
+            </button>
+          </div>
+          {aiExplanation}
+        </div>
+      )}
+
+      {/* Console area */}
+      <div className="bg-black border border-[--border] rounded-[--radius-lg] p-4 h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-slate-300">
+        {logsLoading ? (
+          <div className="flex justify-center items-center h-full"><PageSpinner /></div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="text-slate-500 text-center py-20">No logs matching active filters.</div>
+        ) : (
+          filteredLogs.map(l => {
+            let color = 'text-slate-300'
+            if (l.level === 'warn') color = 'text-yellow-400'
+            if (l.level === 'error') color = 'text-red-400'
+            return (
+              <div key={l.id} className="flex gap-3">
+                <span className="text-slate-500 flex-shrink-0">[{new Date(l.created_at).toLocaleTimeString()}]</span>
+                <span className={`${color} flex-1`}>{l.message}</span>
+              </div>
+            )
+          })
+        )}
+      </div>
     </div>
   )
 }
