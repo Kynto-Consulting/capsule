@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Execute"
+    ],
+    "deny": []
+  },
+  "preferences": {
+    "language": "en",
+    "codeStyle": "clean-architecture",
+    "testFramework": "go-testing",
+    "linting": "golangci-lint"
+  }
+}

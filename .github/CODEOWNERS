@@ -1,0 +1,49 @@
+# Capsule CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ──────────────────────────────────────────────
+# Default — require review from core team
+# ──────────────────────────────────────────────
+*                           @Kynto/capsule-core
+
+# ──────────────────────────────────────────────
+# Backend (Go API Server)
+# ──────────────────────────────────────────────
+/backend/                   @Kynto/backend
+/backend/internal/server/   @Kynto/backend
+/backend/internal/service/  @Kynto/backend
+/backend/internal/repository/ @Kynto/backend
+
+# ──────────────────────────────────────────────
+# Frontend (Next.js Dashboard)
+# ──────────────────────────────────────────────
+/frontend/                  @Kynto/frontend
+/frontend/app/              @Kynto/frontend
+/frontend/components/       @Kynto/frontend
+
+# ──────────────────────────────────────────────
+# CLI
+# ──────────────────────────────────────────────
+/cli/                       @Kynto/cli
+
+# ──────────────────────────────────────────────
+# Infrastructure & DevOps
+# ──────────────────────────────────────────────
+/deploy/                    @Kynto/infra
+/docker-compose*.yml        @Kynto/infra
+/.github/workflows/         @Kynto/infra
+Dockerfile                  @Kynto/infra
+Makefile                    @Kynto/infra
+
+# ──────────────────────────────────────────────
+# Documentation
+# ──────────────────────────────────────────────
+/docs/                      @Kynto/docs
+*.md                        @Kynto/docs
+
+# ──────────────────────────────────────────────
+# Security-sensitive files — require senior review
+# ──────────────────────────────────────────────
+SECURITY.md                 @Kynto/security
+/backend/internal/auth/     @Kynto/security @Kynto/backend
+/backend/internal/middleware/ @Kynto/security @Kynto/backend

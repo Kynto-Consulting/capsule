@@ -1,0 +1,210 @@
+# ──────────────────────────────────────────────────────────────
+# Capsule — Production Docker Compose
+# ──────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml logs -f
+#   docker compose -f docker-compose.prod.yml down
+#
+# Prerequisites:
+#   - Create .env file with production secrets (see deploy docs)
+#   - Ensure DNS records point to this server
+# ──────────────────────────────────────────────────────────────
+
+name: capsule-prod
+
+services:
+  # ────────────────────────────────────────────
+  # Reverse Proxy (TLS Termination)
+  # ────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.1
+    container_name: capsule-traefik
+    restart: always
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --log.level=WARN
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - capsule-letsencrypt:/letsencrypt
+      - capsule-traefik-logs:/var/log/traefik
+    networks:
+      - capsule-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ────────────────────────────────────────────
+  # Backend API Server
+  # ────────────────────────────────────────────
+  backend:
+    image: ghcr.io/kynto/capsule-backend:${CAPSULE_VERSION:-latest}
+    container_name: capsule-backend
+    restart: always
+    expose:
+      - "8080"
+    environment:
+      - CAPSULE_ENV=production
+      - CAPSULE_PORT=8080
+      - CAPSULE_LOG_LEVEL=${CAPSULE_LOG_LEVEL:-info}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CAPSULE_SECRET_KEY=${CAPSULE_SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.backend.entrypoints=websecure
+      - traefik.http.routers.backend.tls.certresolver=letsencrypt
+      - traefik.http.services.backend.loadbalancer.server.port=8080
+      # WebSocket support
+      - traefik.http.routers.backend-ws.rule=Host(`${DOMAIN}`) && PathPrefix(`/ws`)
+      - traefik.http.routers.backend-ws.entrypoints=websecure
+      - traefik.http.routers.backend-ws.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-ws.loadbalancer.server.port=8080
+    healthcheck:
+      test: ["CMD", "/capsule-server", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - capsule-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  # ────────────────────────────────────────────
+  # Frontend Dashboard
+  # ────────────────────────────────────────────
+  frontend:
+    image: ghcr.io/kynto/capsule-frontend:${CAPSULE_VERSION:-latest}
+    container_name: capsule-frontend
+    restart: always
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+      - traefik.http.routers.frontend.priority=1
+      - traefik.http.services.frontend.loadbalancer.server.port=3000
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - capsule-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  # ────────────────────────────────────────────
+  # PostgreSQL Database
+  # ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: capsule-postgres
+    restart: always
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-capsule}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-capsule}
+    volumes:
+      - capsule-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-capsule}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - capsule-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  # ────────────────────────────────────────────
+  # Redis Cache
+  # ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: capsule-redis
+    restart: always
+    expose:
+      - "6379"
+    command: >
+      redis-server
+        --appendonly yes
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - capsule-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - capsule-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+# ────────────────────────────────────────────
+# Volumes
+# ────────────────────────────────────────────
+volumes:
+  capsule-postgres-data:
+    driver: local
+  capsule-redis-data:
+    driver: local
+  capsule-letsencrypt:
+    driver: local
+  capsule-traefik-logs:
+    driver: local
+
+# ────────────────────────────────────────────
+# Networks
+# ────────────────────────────────────────────
+networks:
+  capsule-net:
+    driver: bridge
