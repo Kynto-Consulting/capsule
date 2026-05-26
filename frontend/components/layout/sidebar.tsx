@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { CapsuleLogo } from '@/components/ui/logo'
 
 const nav = [
   {
@@ -66,16 +67,11 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-56 h-full border-r border-[--border] bg-[--bg-subtle]">
+    <aside className="flex flex-col w-56 h-full bg-[--bg-subtle]" style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}>
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 h-14 border-b border-[--border]">
-        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[--accent-dim] border border-[--border-strong]">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[--accent-light]">
-            <path d="M3 7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
-            <path d="M12 3v18M3 12h18" strokeOpacity="0.4" />
-          </svg>
-        </div>
-        <span className="text-sm font-semibold text-[--text-primary]">Capsule</span>
+      <div className="flex items-center gap-2.5 px-4 h-14">
+        <CapsuleLogo size={22} />
+        <span className="text-sm font-semibold text-[--text-primary] tracking-tight">Capsule</span>
       </div>
 
       {/* Nav */}
@@ -89,11 +85,11 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-2.5 px-3 h-9 rounded-[--radius] text-sm transition-all duration-150',
                 active
-                  ? 'bg-[--accent-dim] text-[--accent-light] border border-[--border-strong]'
-                  : 'text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-raised]',
+                  ? 'bg-[rgba(255,255,255,0.06)] text-[--text-primary]'
+                  : 'text-[--text-muted] hover:text-[--text-secondary] hover:bg-[rgba(255,255,255,0.04)]',
               )}
             >
-              <span className={cn('flex-shrink-0', active ? 'text-[--accent-light]' : 'text-[--text-muted]')}>
+              <span className={cn('flex-shrink-0', active ? 'text-[--text-primary]' : 'text-[--text-muted]')}>
                 {item.icon}
               </span>
               {item.label}
@@ -103,7 +99,7 @@ export function Sidebar() {
       </nav>
 
       {/* User */}
-      <div className="px-2 py-3 border-t border-[--border]">
+      <div className="px-2 py-3">
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-[--radius] hover:bg-[--bg-raised] transition-colors group">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
             {user?.name?.[0]?.toUpperCase() ?? '?'}

@@ -9,10 +9,14 @@
   --bg-raised:  #1a1a1a;
   --bg-overlay: #222222;
 
-  /* Borders — Vercel-style: white with low opacity */
-  --border:        rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --border-focus:  rgba(124, 58, 237, 0.7);
+  /* Borders — near-invisible, exactly like Vercel */
+  --border:        rgba(255, 255, 255, 0.055);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --border-focus:  rgba(124, 58, 237, 0.6);
+
+  /* Danger alias (same as error) */
+  --danger:     #ef4444;
+  --danger-dim: rgba(239, 68, 68, 0.1);
 
   /* Accent — Violet (used sparingly) */
   --accent:       #7c3aed;
