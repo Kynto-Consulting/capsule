@@ -70,7 +70,7 @@ resource "aws_lb_target_group" "backend" {
   vpc_id   = data.aws_vpc.default.id
 
   health_check {
-    path                = "/api/v1/health"
+    path                = "/health"
     port                = "8080"
     protocol            = "HTTP"
     matcher             = "200"
