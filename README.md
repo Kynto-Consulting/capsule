@@ -204,6 +204,19 @@ cd frontend && pnpm install && pnpm dev
 cd cli && go build -o ../bin/capsule ./cmd/capsule
 ```
 
+### Environment Setup
+
+Copy the example files before running locally:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+Backend CORS must include the dashboard origin. Use `http://localhost:3000` and `http://127.0.0.1:3000` for local development, and `https://app.tumi-ai.com` in production.
+
+The frontend must receive the public API URL at build time. Use `NEXT_PUBLIC_API_URL=http://localhost:8080` locally and `NEXT_PUBLIC_API_URL=https://api.tumi-ai.com` in production.
+
 ### Useful Make Targets
 
 ```bash

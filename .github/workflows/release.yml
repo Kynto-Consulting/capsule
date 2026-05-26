@@ -145,6 +145,8 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
+            NEXT_PUBLIC_API_URL=https://api.tumi-ai.com
+            NEXT_PUBLIC_WS_URL=wss://api.tumi-ai.com
 
   # ──────────────────────────────────────────────
   # Create GitHub Release

@@ -25,6 +25,12 @@ Welcome to the **Capsule** team! This document contains everything you need to g
    ```
    This fires up the PostgreSQL and Redis containers in the background.
 
+   Copy the example env files before running the services:
+   ```bash
+   cp backend/.env.example backend/.env
+   cp frontend/.env.example frontend/.env.local
+   ```
+
 3. Run the API Backend in development mode:
    ```bash
    make dev-backend
@@ -34,6 +40,14 @@ Welcome to the **Capsule** team! This document contains everything you need to g
    ```bash
    make dev-frontend
    ```
+
+### Environment variables
+
+- Backend: `DATABASE_URL`, `REDIS_URL`, `CAPSULE_SECRET_KEY`, `CORS_ALLOWED_ORIGINS`
+- Frontend: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`
+- Local CORS should include `http://localhost:3000` and `http://127.0.0.1:3000`
+- Production CORS should include `https://app.tumi-ai.com`
+- Production frontend API URL should be `https://api.tumi-ai.com`
 
 5. Build the CLI tool locally to verify compilation:
    ```bash
