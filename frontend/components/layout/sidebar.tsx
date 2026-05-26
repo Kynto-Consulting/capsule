@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { api } from '@/lib/api'
 
 const nav = [
   {
@@ -59,9 +60,16 @@ const nav = [
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, clearAuth } = useAuthStore()
+  const { user, accessToken, refreshToken, clearAuth } = useAuthStore()
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      if (refreshToken) {
+        await api.post('/api/v1/auth/logout', { refresh_token: refreshToken }, accessToken ?? undefined)
+      }
+    } catch {
+      // Don't block logout if API call fails
+    }
     clearAuth()
     router.push('/login')
   }

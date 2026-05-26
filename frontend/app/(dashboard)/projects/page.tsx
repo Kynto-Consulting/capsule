@@ -134,9 +134,9 @@ export default function ProjectsPage() {
               {/* New project card */}
               <button
                 onClick={() => setShowCreateProject(true)}
-                className="rounded-[--radius-lg] border border-dashed border-[--border] bg-transparent hover:border-[--border-strong] hover:bg-[--bg-surface] transition-all duration-200 p-4 flex flex-col items-center justify-center gap-2 text-[--text-muted] hover:text-[--text-secondary] min-h-[108px] group"
+                className="rounded-[--radius-lg] border border-dashed border-[rgba(255,255,255,0.08)] bg-transparent hover:border-[rgba(255,255,255,0.15)] hover:bg-[--bg-surface] transition-all duration-200 p-4 flex flex-col items-center justify-center gap-2 text-[--text-muted] hover:text-[--text-secondary] min-h-[108px] group"
               >
-                <div className="w-8 h-8 rounded-[--radius-sm] border border-dashed border-[--border] group-hover:border-[--border-strong] flex items-center justify-center transition-colors">
+                <div className="w-8 h-8 rounded-[--radius-sm] border border-dashed border-[rgba(255,255,255,0.08)] group-hover:border-[rgba(255,255,255,0.15)] flex items-center justify-center transition-colors">
                   <PlusIcon />
                 </div>
                 <span className="text-xs">New project</span>
@@ -152,8 +152,8 @@ export default function ProjectsPage() {
 function EmptyOrgState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center">
-      <div className="w-12 h-12 rounded-[--radius-lg] bg-[--bg-raised] border border-[--border] flex items-center justify-center">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <div className="w-12 h-12 rounded-[--radius-lg] bg-[--bg-raised] flex items-center justify-center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
       </div>
