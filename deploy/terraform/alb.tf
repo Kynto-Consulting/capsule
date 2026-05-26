@@ -14,6 +14,23 @@ resource "aws_lb" "capsule" {
   }
 }
 
+# ACM certificate for app + api subdomains
+resource "aws_acm_certificate" "capsule" {
+  domain_name               = "app.tumi-ai.com"
+  subject_alternative_names = ["api.tumi-ai.com"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "capsule"
+  }
+}
+
 # Target group → EC2 Traefik on port 80
 resource "aws_lb_target_group" "traefik" {
   name     = "${var.app_name}-traefik"
@@ -45,10 +62,35 @@ resource "aws_lb_target_group_attachment" "builder" {
   port             = 80
 }
 
+# HTTP → HTTPS redirect
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.capsule.arn
   port              = 80
   protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "capsule"
+  }
+}
+
+# HTTPS listener — forwards to Traefik, ALB terminates TLS
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.capsule.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.capsule.arn
 
   default_action {
     type             = "forward"
@@ -62,31 +104,14 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# HTTPS listener — only created when alb_domain is non-empty.
-# You must provide a valid ACM certificate ARN via var.alb_certificate_arn.
-resource "aws_lb_listener" "https" {
-  count = var.alb_domain != "" ? 1 : 0
-
-  load_balancer_arn = aws_lb.capsule.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.alb_certificate_arn
-
-  default_action {
-    type = "fixed-response"
-
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "404 Not Found"
-      status_code  = "404"
+output "acm_dns_validation_records" {
+  description = "CNAME records to add in Namecheap to validate the ACM certificate"
+  value = {
+    for dvo in aws_acm_certificate.capsule.domain_validation_options : dvo.domain_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
     }
-  }
-
-  tags = {
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Project     = "capsule"
   }
 }
 
