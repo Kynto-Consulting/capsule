@@ -33,6 +33,30 @@ export interface Project {
   updated_at: string
 }
 
+export interface Deployment {
+  id: string
+  project_id: string
+  server_id?: string
+  version: string
+  git_sha?: string
+  status: string
+  image_tag?: string
+  build_strategy?: string
+  trigger: string
+  triggered_by?: string
+  started_at?: string
+  completed_at?: string
+  created_at: string
+}
+
+export interface BuildLog {
+  id: string
+  deployment_id: string
+  level: string
+  message: string
+  created_at: string
+}
+
 export interface EnvVar {
   id: string
   project_id: string

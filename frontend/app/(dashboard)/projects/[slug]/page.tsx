@@ -11,9 +11,9 @@ import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
-import type { Project, EnvVar } from '@/lib/types'
+import { formatRelative } from '@/lib/utils'
+import type { Project, EnvVar, Deployment } from '@/lib/types'
 
-// Types for this page
 type EnvVarWithValue = EnvVar & { value: string }
 
 export default function ProjectDetailPage() {
@@ -48,7 +48,14 @@ export default function ProjectDetailPage() {
     enabled: !!orgId && !!project?.id,
   })
 
-  const [tab, setTab] = useState<'overview' | 'env' | 'settings'>('overview')
+  const { data: deploymentsRes, isLoading: deploymentsLoading } = useQuery({
+    queryKey: ['deployments', orgId, project?.id],
+    queryFn: () => api.get<{ data: Deployment[]; meta: { total: number } }>(`/api/v1/orgs/${orgId}/projects/${project!.id}/deployments`, token),
+    enabled: !!orgId && !!project?.id,
+  })
+  const deployments = deploymentsRes?.data ?? []
+
+  const [tab, setTab] = useState<'overview' | 'deployments' | 'env' | 'settings'>('overview')
 
   if (orgsLoading || projectsLoading) return <PageSpinner />
   if (!project) return (
@@ -75,7 +82,7 @@ export default function ProjectDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[--border] mb-6">
-        {(['overview', 'env', 'settings'] as const).map(t => (
+        {(['overview', 'deployments', 'env', 'settings'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -91,6 +98,16 @@ export default function ProjectDetailPage() {
       </div>
 
       {tab === 'overview' && <OverviewTab project={project} />}
+      {tab === 'deployments' && (
+        <DeploymentsTab
+          deployments={deployments}
+          loading={deploymentsLoading}
+          onTrigger={async () => {
+            await api.post(`/api/v1/orgs/${orgId}/projects/${project.id}/deployments`, { version: 'manual' }, token)
+            qc.invalidateQueries({ queryKey: ['deployments', orgId, project.id] })
+          }}
+        />
+      )}
       {tab === 'env' && (
         <EnvTab
           envVars={envVars ?? []}
@@ -240,6 +257,62 @@ function EnvTab({
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DeploymentsTab({
+  deployments, loading, onTrigger,
+}: {
+  deployments: Deployment[]
+  loading: boolean
+  onTrigger: () => Promise<void>
+}) {
+  const [triggering, setTriggering] = useState(false)
+
+  const statusColor: Record<string, string> = {
+    queued:    'text-[--text-muted]',
+    building:  'text-yellow-400',
+    deploying: 'text-blue-400',
+    success:   'text-green-400',
+    failed:    'text-red-400',
+    cancelled: 'text-[--text-muted]',
+  }
+
+  async function handleTrigger() {
+    setTriggering(true)
+    try { await onTrigger() } finally { setTriggering(false) }
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><PageSpinner /></div>
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Button size="sm" onClick={handleTrigger} loading={triggering}>Trigger deploy</Button>
+      </div>
+
+      {deployments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-40 text-[--text-muted] text-sm">
+          No deployments yet.
+        </div>
+      ) : (
+        <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
+          {deployments.map((d, i) => (
+            <div key={d.id} className={`flex items-center gap-4 px-4 py-3 ${i > 0 ? 'border-t border-[--border]' : ''}`}>
+              <span className={`text-xs font-medium w-20 ${statusColor[d.status] ?? 'text-[--text-muted]'}`}>
+                {d.status}
+              </span>
+              <span className="text-xs font-mono text-[--text-muted] w-32 truncate">{d.version}</span>
+              {d.git_sha && (
+                <span className="text-xs font-mono text-[--text-muted]">{d.git_sha.slice(0, 7)}</span>
+              )}
+              <span className="text-xs text-[--text-muted] ml-auto">{d.trigger}</span>
+              <span className="text-xs text-[--text-muted] w-20 text-right">{formatRelative(d.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
