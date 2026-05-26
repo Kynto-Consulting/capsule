@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
-import { CapsuleLogo } from '@/components/ui/logo'
 
 const nav = [
   {
@@ -70,7 +70,7 @@ export function Sidebar() {
     <aside className="flex flex-col w-56 h-full bg-[--bg-subtle]" style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}>
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 h-14">
-        <CapsuleLogo size={22} />
+        <Image src="/logo.png" alt="Capsule" width={24} height={35} className="flex-shrink-0" />
         <span className="text-sm font-semibold text-[--text-primary] tracking-tight">Capsule</span>
       </div>
 
