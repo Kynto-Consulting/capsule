@@ -72,6 +72,19 @@ resource "aws_iam_user_policy" "capsule_api" {
           "bedrock:InvokeModelWithResponseStream"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "SSMDeployAccess"
+        Effect = "Allow"
+        Action = [
+          "ssm:StartSession",
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation",
+          "ssm:ListCommandInvocations",
+          "ssm:TerminateSession"
+        ]
+        Resource = "*"
       }
     ]
   })

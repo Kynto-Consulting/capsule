@@ -66,6 +66,11 @@ resource "aws_iam_role_policy_attachment" "builder_s3" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
+resource "aws_iam_role_policy_attachment" "builder_ssm" {
+  role       = aws_iam_role.builder.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_instance_profile" "builder" {
   name = "${var.app_name}-builder"
   role = aws_iam_role.builder.name
