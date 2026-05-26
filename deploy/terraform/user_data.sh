@@ -2,6 +2,9 @@
 set -euo pipefail
 exec > >(tee /var/log/capsule-init.log | logger -t capsule-init) 2>&1
 
+# Disable firewalld FIRST so SSH is reachable immediately
+systemctl disable --now firewalld || true
+
 # ── System setup ──────────────────────────────────────────────
 dnf update -y
 dnf install -y docker git aws-cli
@@ -9,9 +12,6 @@ dnf install -y docker git aws-cli
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
-
-# Disable firewalld to avoid networking issues
-systemctl disable --now firewalld || true
 
 # Install docker compose plugin
 mkdir -p /usr/local/lib/docker/cli-plugins
