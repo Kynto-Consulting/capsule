@@ -1,0 +1,13 @@
+.git
+.github
+bin
+node_modules
+frontend/.next
+frontend/node_modules
+frontend/.env.local
+frontend/.env.*.local
+frontend/.dockerignore
+frontend/README.md
+deploy/terraform/terraform.tfstate
+deploy/terraform/terraform.tfstate.backup
+deploy/terraform/tfplan

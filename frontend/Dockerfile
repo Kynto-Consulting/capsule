@@ -13,8 +13,8 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
 FROM base AS builder
-ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_WS_URL
+ARG NEXT_PUBLIC_API_URL=https://api.tumi-ai.com
+ARG NEXT_PUBLIC_WS_URL=wss://api.tumi-ai.com
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 COPY --from=deps /app/node_modules ./node_modules
@@ -24,8 +24,8 @@ RUN bun run build
 
 FROM node:20-alpine AS production
 WORKDIR /app
-ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_WS_URL
+ARG NEXT_PUBLIC_API_URL=https://api.tumi-ai.com
+ARG NEXT_PUBLIC_WS_URL=wss://api.tumi-ai.com
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
