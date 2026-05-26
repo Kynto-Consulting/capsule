@@ -33,6 +33,15 @@ export interface Project {
   updated_at: string
 }
 
+export interface EnvVar {
+  id: string
+  project_id: string
+  key: string
+  value: string
+  is_secret: boolean
+  scope: string
+}
+
 export interface ListResponse<T> {
   data: T[]
   meta: { page: number; per_page: number; total: number }
