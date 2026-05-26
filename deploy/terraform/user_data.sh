@@ -34,8 +34,11 @@ aws s3 cp s3://capsule-artifacts-348973061281/config/.env .env --region us-east-
 aws ecr get-login-password --region us-east-1 \
   | docker login --username AWS --password-stdin 348973061281.dkr.ecr.us-east-1.amazonaws.com
 
+# Build the frontend locally so the browser bundle picks up production URLs
+docker compose -f docker-compose.prod.yml build frontend
+
 # Pull images and start
-docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml pull backend redis
 docker compose -f docker-compose.prod.yml up -d
 
 echo "Capsule deployed successfully at $(date)"

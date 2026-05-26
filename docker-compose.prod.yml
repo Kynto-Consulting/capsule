@@ -33,6 +33,12 @@ services:
     restart: always
     ports:
       - "3000:3000"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.tumi-ai.com
+        NEXT_PUBLIC_WS_URL: wss://api.tumi-ai.com
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=https://api.tumi-ai.com
