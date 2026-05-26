@@ -14,19 +14,44 @@ resource "aws_lb" "capsule" {
   }
 }
 
+# Target group → EC2 Traefik on port 80
+resource "aws_lb_target_group" "traefik" {
+  name     = "${var.app_name}-traefik"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/ping"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "capsule"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "builder" {
+  target_group_arn = aws_lb_target_group.traefik.arn
+  target_id        = aws_instance.builder.id
+  port             = 80
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.capsule.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type = "fixed-response"
-
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "404 Not Found"
-      status_code  = "404"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.traefik.arn
   }
 
   tags = {

@@ -41,6 +41,14 @@ resource "aws_security_group" "app" {
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
+    description     = "HTTP from ALB to Traefik"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
     description     = "App port range from ALB"
     from_port       = 8080
     to_port         = 8090

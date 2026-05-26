@@ -28,6 +28,9 @@ services:
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --api.insecure=false
+      - --ping=true
+      - --ping.entrypoint=web
       - --log.level=WARN
       - --accesslog=true
       - --accesslog.filepath=/var/log/traefik/access.log
