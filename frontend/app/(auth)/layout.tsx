@@ -41,7 +41,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="relative z-10 w-full max-w-sm animate-fade-up">
         <div className="flex flex-col items-center mb-6">
           <Link href="/" className="block">
-            <Image src="/logo.png" alt="Capsule" width={48} height={48} className="rounded-xl" priority />
+            <Image src="/logo.png" alt="Capsule" width={60} height={60} className="rounded-xl" priority />
           </Link>
         </div>
         {children}
