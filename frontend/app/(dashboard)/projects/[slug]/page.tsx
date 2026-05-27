@@ -12,7 +12,7 @@ import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
-import type { Project, EnvVar, Deployment, BuildLog } from '@/lib/types'
+import type { Project, EnvVar, Deployment, BuildLog, ExecutionLog } from '@/lib/types'
 
 type EnvVarWithValue = EnvVar & { value: string }
 
@@ -461,49 +461,166 @@ function StorageTab({ project, token, orgId }: { project: Project; token: string
   )
 }
 
+// ─── Log type definitions ────────────────────────────────────────────────────
+
+type LogTypeKey = 'build' | 'runtime' | 'lambda' | 'storage' | 'cron'
+
+interface LogTypeConfig {
+  key: LogTypeKey
+  label: string
+  description: string
+  /** which deploy_types show this tab; undefined = all */
+  forTypes?: Array<'docker' | 'lambda' | 'static'>
+}
+
+const ALL_LOG_TYPES: LogTypeConfig[] = [
+  { key: 'build',   label: 'Build',   description: 'Deploy build output' },
+  { key: 'runtime', label: 'Runtime', description: 'Live container stdout/stderr', forTypes: ['docker'] },
+  { key: 'lambda',  label: 'Lambda',  description: 'Serverless request logs',      forTypes: ['lambda'] },
+  { key: 'storage', label: 'Storage', description: 'S3 access logs',               forTypes: ['static'] },
+  { key: 'cron',    label: 'Cron',    description: 'Scheduled job executions' },
+]
+
+function defaultLogType(deployType: string): LogTypeKey {
+  if (deployType === 'docker')  return 'runtime'
+  if (deployType === 'lambda')  return 'lambda'
+  if (deployType === 'static')  return 'storage'
+  return 'build'
+}
+
+// ─── Log console row ─────────────────────────────────────────────────────────
+
+function LogRow({ ts, level, message, extra }: { ts: string; level: string; message: string; extra?: string }) {
+  let levelCls = 'text-cyan-400'
+  let msgCls   = 'text-slate-300'
+  if (level === 'warn')  { levelCls = 'text-yellow-400'; msgCls = 'text-yellow-200' }
+  if (level === 'error') { levelCls = 'text-red-400';    msgCls = 'text-red-300' }
+  return (
+    <div className="flex gap-2 hover:bg-white/[0.02] px-1 rounded group">
+      <span className="text-slate-600 flex-shrink-0 tabular-nums">{ts}</span>
+      <span className={`${levelCls} font-bold flex-shrink-0 w-10 uppercase text-[10px] mt-px`}>{level}</span>
+      <span className={`${msgCls} flex-1 whitespace-pre-wrap break-all`}>
+        {message}
+        {extra && <span className="text-slate-500 text-[10px] ml-2">{extra}</span>}
+      </span>
+    </div>
+  )
+}
+
+// ─── Main LogsTab ─────────────────────────────────────────────────────────────
+
 function LogsTab({ project, token, orgId, deployments }: { project: Project; token: string; orgId: string; deployments: Deployment[] }) {
-  const [logType, setLogType] = useState<'build' | 'runtime'>('runtime')
-  const [selectedDeploy, setSelectedDeploy] = useState('')
-  const [filterLevel, setFilterLevel] = useState<'all' | 'info' | 'warn' | 'error'>('all')
+  const deployType = project.deploy_type ?? 'docker'
+  const availableTypes = ALL_LOG_TYPES.filter(t => !t.forTypes || t.forTypes.includes(deployType as any))
+
+  const [logType,      setLogType]      = useState<LogTypeKey>(() => defaultLogType(deployType))
+  const [selectedDeploy, setSelectedDeploy] = useState(() => deployments[0]?.id ?? '')
+  const [filterLevel,  setFilterLevel]  = useState<'all' | 'info' | 'warn' | 'error'>('all')
+  const [autoRefresh,  setAutoRefresh]  = useState(false)
   const [aiExplanation, setAIExplanation] = useState<string | null>(null)
-  const [explaining, setExplaining] = useState(false)
+  const [explaining,   setExplaining]   = useState(false)
 
-  // Fetch build logs for selected deployment
-  const { data: logsRes, isLoading: logsLoading } = useQuery({
-    queryKey: ['build-logs', orgId, project.id, selectedDeploy],
-    queryFn: () => api.get<BuildLog[]>(`/api/v1/orgs/${orgId}/projects/${project.id}/deployments/${selectedDeploy}/logs`, token),
+  const refetchMs = autoRefresh ? 3000 : false
+
+  // Build logs (per-deployment)
+  const { data: buildLogsRes, isLoading: buildLoading } = useQuery({
+    queryKey: ['logs-build', orgId, project.id, selectedDeploy],
+    queryFn: () => api.get<{ data: BuildLog[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/deployments/${selectedDeploy}/logs`, token),
     enabled: logType === 'build' && !!selectedDeploy,
+    refetchInterval: logType === 'build' ? refetchMs : false,
   })
-  const buildLogs = logsRes ?? []
 
-  // Simulated live runtime logs
-  const runtimeLogs: BuildLog[] = [
-    { id: '1', deployment_id: '1', level: 'info', message: 'Starting Capsule production runtime engine on us-east-1...', created_at: new Date().toISOString() },
-    { id: '2', deployment_id: '1', level: 'info', message: 'Injected environment variable: PORT=8080', created_at: new Date().toISOString() },
-    { id: '3', deployment_id: '1', level: 'info', message: 'Successfully connected to PostgreSQL database at capsule-prod-db.us-east-1.rds.amazonaws.com:5432', created_at: new Date().toISOString() },
-    { id: '4', deployment_id: '1', level: 'warn', message: 'Redis connection offline; falling back to memory caching layer', created_at: new Date().toISOString() },
-    { id: '5', deployment_id: '1', level: 'info', message: 'Listening and serving HTTP traffic on 0.0.0.0:8080', created_at: new Date().toISOString() },
-    { id: '6', deployment_id: '1', level: 'error', message: 'Failed to dispatch webhook event: payload deadline exceeded', created_at: new Date().toISOString() },
-  ]
-
-  const activeLogs = logType === 'build' ? buildLogs : runtimeLogs
-
-  const filteredLogs = activeLogs.filter(l => {
-    if (filterLevel === 'all') return true
-    return l.level.toLowerCase() === filterLevel
+  // Runtime logs (docker container stdout)
+  const { data: runtimeRes, isLoading: runtimeLoading } = useQuery({
+    queryKey: ['logs-runtime', orgId, project.id],
+    queryFn: () => api.get<{ container: string; lines: string[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/logs/runtime?tail=200`, token),
+    enabled: logType === 'runtime',
+    refetchInterval: logType === 'runtime' ? refetchMs : false,
   })
+
+  // Lambda execution logs
+  const { data: lambdaRes, isLoading: lambdaLoading } = useQuery({
+    queryKey: ['logs-lambda', orgId, project.id],
+    queryFn: () => api.get<{ data: ExecutionLog[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/logs/lambda?tail=200`, token),
+    enabled: logType === 'lambda',
+    refetchInterval: logType === 'lambda' ? refetchMs : false,
+  })
+
+  // Storage (S3) access logs
+  const { data: storageRes, isLoading: storageLoading } = useQuery({
+    queryKey: ['logs-storage', orgId, project.id],
+    queryFn: () => api.get<{ data: ExecutionLog[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/logs/storage?tail=200`, token),
+    enabled: logType === 'storage',
+    refetchInterval: logType === 'storage' ? refetchMs : false,
+  })
+
+  // Cron execution logs
+  const { data: cronRes, isLoading: cronLoading } = useQuery({
+    queryKey: ['logs-cron', orgId, project.id],
+    queryFn: () => api.get<{ data: ExecutionLog[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/logs/cron?tail=200`, token),
+    enabled: logType === 'cron',
+    refetchInterval: logType === 'cron' ? refetchMs : false,
+  })
+
+  // Normalise all log types to a common shape for the console
+  type NormLog = { id: string; ts: string; level: string; message: string; extra?: string }
+
+  function normLogs(): NormLog[] {
+    switch (logType) {
+      case 'build': {
+        const logs = buildLogsRes?.data ?? []
+        return logs.map((l, i) => ({
+          id: l.id || String(i),
+          ts: new Date(l.created_at).toLocaleTimeString(),
+          level: l.level || 'info',
+          message: l.message,
+        }))
+      }
+      case 'runtime': {
+        const lines = runtimeRes?.lines ?? []
+        return lines.map((line, i) => ({
+          id: String(i),
+          ts: new Date().toLocaleTimeString(),
+          level: 'info',
+          message: line,
+        }))
+      }
+      case 'lambda': {
+        return (lambdaRes?.data ?? []).map(l => ({
+          id: l.id, ts: new Date(l.created_at).toLocaleTimeString(),
+          level: l.level, message: l.message, extra: l.source_id,
+        }))
+      }
+      case 'storage': {
+        return (storageRes?.data ?? []).map(l => ({
+          id: l.id, ts: new Date(l.created_at).toLocaleTimeString(),
+          level: l.level, message: l.message, extra: l.source_id,
+        }))
+      }
+      case 'cron': {
+        return (cronRes?.data ?? []).map(l => ({
+          id: l.id, ts: new Date(l.created_at).toLocaleTimeString(),
+          level: l.level, message: l.message, extra: l.source_id,
+        }))
+      }
+    }
+  }
+
+  const isLoading = buildLoading || runtimeLoading || lambdaLoading || storageLoading || cronLoading
+
+  const filteredLogs = normLogs().filter(l =>
+    filterLevel === 'all' ? true : l.level.toLowerCase() === filterLevel
+  )
 
   async function handleAIExplain() {
-    if (!selectedDeploy && logType === 'build') return
     setExplaining(true)
     setAIExplanation(null)
     try {
-      const res = await api.post<{ explanation: string }>('/api/v1/ai/explain-failure', {
-        deployment_id: selectedDeploy || deployments[0]?.id || '',
-      }, token)
+      const depID = selectedDeploy || deployments[0]?.id || ''
+      const res = await api.post<{ explanation: string }>('/api/v1/ai/explain-failure', { deployment_id: depID }, token)
       setAIExplanation(res.explanation)
     } catch (err: any) {
-      setAIExplanation('Bedrock AI log analyzer error: ' + err.message)
+      setAIExplanation('Bedrock AI error: ' + err.message)
     } finally {
       setExplaining(false)
     }
@@ -511,61 +628,93 @@ function LogsTab({ project, token, orgId, deployments }: { project: Project; tok
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
+
+      {/* ── Type tabs + controls ── */}
       <div className="flex flex-wrap justify-between items-center gap-2">
-        <div className="flex gap-2 bg-[--bg-raised] rounded-[--radius-sm] p-0.5 border border-[--border]">
-          <button
-            onClick={() => setLogType('runtime')}
-            className={`px-3 py-1 text-xs font-semibold rounded-[--radius-xs] transition-colors ${
-              logType === 'runtime' ? 'bg-[rgba(255,255,255,0.06)] text-[--text-primary]' : 'text-[--text-muted] hover:text-[--text-secondary]'
-            }`}
-          >
-            Runtime Logs
-          </button>
-          <button
-            onClick={() => setLogType('build')}
-            className={`px-3 py-1 text-xs font-semibold rounded-[--radius-xs] transition-colors ${
-              logType === 'build' ? 'bg-[rgba(255,255,255,0.06)] text-[--text-primary]' : 'text-[--text-muted] hover:text-[--text-secondary]'
-            }`}
-          >
-            Build Logs
-          </button>
+
+        {/* Log type selector */}
+        <div className="flex gap-0.5 bg-[--bg-raised] rounded-[--radius-sm] p-0.5 border border-[--border]">
+          {availableTypes.map(t => (
+            <button
+              key={t.key}
+              title={t.description}
+              onClick={() => setLogType(t.key)}
+              className={`px-3 py-1 text-xs font-semibold rounded-[--radius-xs] transition-colors ${
+                logType === t.key
+                  ? 'bg-[rgba(255,255,255,0.08)] text-[--text-primary]'
+                  : 'text-[--text-muted] hover:text-[--text-secondary]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        {logType === 'build' && (
-          <select
-            value={selectedDeploy}
-            onChange={e => setSelectedDeploy(e.target.value)}
-            className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
-          >
-            <option value="">Select deployment...</option>
-            {deployments.map(d => (
-              <option key={d.id} value={d.id}>{d.version} ({d.status})</option>
-            ))}
-          </select>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Deployment selector (build tab only) */}
+          {logType === 'build' && (
+            <select
+              value={selectedDeploy}
+              onChange={e => setSelectedDeploy(e.target.value)}
+              className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
+            >
+              <option value="">Select deployment…</option>
+              {deployments.map(d => (
+                <option key={d.id} value={d.id}>
+                  {d.version} — {d.status}
+                </option>
+              ))}
+            </select>
+          )}
 
-        <div className="flex gap-2">
-          {/* Level Filter */}
+          {/* Level filter */}
           <select
             value={filterLevel}
             onChange={e => setFilterLevel(e.target.value as any)}
             className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
           >
-            <option value="all">All Levels</option>
+            <option value="all">All levels</option>
             <option value="info">INFO</option>
             <option value="warn">WARN</option>
             <option value="error">ERROR</option>
           </select>
 
-          {/* AI explainer */}
+          {/* Auto-refresh toggle */}
+          <button
+            onClick={() => setAutoRefresh(v => !v)}
+            title={autoRefresh ? 'Stop auto-refresh' : 'Auto-refresh every 3 s'}
+            className={`px-2 py-1 text-xs rounded border transition-colors ${
+              autoRefresh
+                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                : 'border-[--border] text-[--text-muted] hover:text-[--text-secondary]'
+            }`}
+          >
+            {autoRefresh ? '⏺ Live' : '⏸ Live'}
+          </button>
+
+          {/* AI explain */}
           <Button size="sm" onClick={handleAIExplain} loading={explaining}>
-            AI Explain Failure
+            AI Explain
           </Button>
         </div>
       </div>
 
-      {/* AI Explanation card */}
+      {/* ── Runtime info bar ── */}
+      {logType === 'runtime' && runtimeRes?.container && (
+        <div className="flex items-center gap-2 text-[11px] text-[--text-muted]">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+          container: <code className="text-[--text-secondary]">{runtimeRes.container}</code>
+        </div>
+      )}
+      {(logType === 'lambda' || logType === 'storage' || logType === 'cron') && (
+        <div className="text-[11px] text-[--text-muted]">
+          {logType === 'lambda'  && 'Serverless invocations persisted per request — use Live to tail'}
+          {logType === 'storage' && 'S3 static file access log — one entry per page/asset request'}
+          {logType === 'cron'    && 'Cron job executions with command output and duration'}
+        </div>
+      )}
+
+      {/* ── AI Explanation ── */}
       {aiExplanation && (
         <div className="bg-violet-950/20 border border-violet-500/30 rounded-[--radius-lg] p-4 text-xs space-y-2 whitespace-pre-wrap leading-relaxed text-[--text-secondary]">
           <div className="flex justify-between items-center">
@@ -578,25 +727,42 @@ function LogsTab({ project, token, orgId, deployments }: { project: Project; tok
         </div>
       )}
 
-      {/* Console area */}
-      <div className="bg-black border border-[--border] rounded-[--radius-lg] p-4 h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-slate-300">
-        {logsLoading ? (
-          <div className="flex justify-center items-center h-full"><PageSpinner /></div>
-        ) : filteredLogs.length === 0 ? (
-          <div className="text-slate-500 text-center py-20">No logs matching active filters.</div>
-        ) : (
-          filteredLogs.map(l => {
-            let color = 'text-slate-300'
-            if (l.level === 'warn') color = 'text-yellow-400'
-            if (l.level === 'error') color = 'text-red-400'
-            return (
-              <div key={l.id} className="flex gap-3">
-                <span className="text-slate-500 flex-shrink-0">[{new Date(l.created_at).toLocaleTimeString()}]</span>
-                <span className={`${color} flex-1`}>{l.message}</span>
-              </div>
-            )
-          })
-        )}
+      {/* ── Console ── */}
+      <div className="bg-[#0a0a0a] border border-[--border] rounded-[--radius-lg] overflow-hidden">
+        {/* Console header */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[--border] bg-[--bg-raised]">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
+          </div>
+          <span className="text-[11px] text-[--text-muted] font-mono">
+            {availableTypes.find(t => t.key === logType)?.description} · {filteredLogs.length} entries
+          </span>
+          <div className="w-16" />
+        </div>
+
+        {/* Log lines */}
+        <div className="h-72 overflow-y-auto p-3 font-mono text-[11px] leading-5">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-full"><PageSpinner /></div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="text-slate-600 text-center py-24">
+              {logType === 'build' && !selectedDeploy
+                ? 'Select a deployment above to view build logs.'
+                : 'No logs yet — deploy the project or trigger an action to see logs here.'}
+            </div>
+          ) : (
+            filteredLogs.map(l => (
+              <LogRow key={l.id} ts={l.ts} level={l.level} message={l.message} extra={l.extra} />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* ── CLI hint ── */}
+      <div className="text-[11px] text-[--text-muted] font-mono">
+        $ capsule logs {logType}{logType === 'build' ? ' [deployment-id]' : ''} --follow
       </div>
     </div>
   )

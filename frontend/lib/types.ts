@@ -24,6 +24,7 @@ export interface Project {
   repo_url: string
   branch: string
   build_strategy: string
+  deploy_type: 'docker' | 'lambda' | 'static'
   runtime: string
   serverless: boolean
   replicas: number
@@ -31,6 +32,16 @@ export interface Project {
   labels: string[]
   created_at: string
   updated_at: string
+}
+
+export interface ExecutionLog {
+  id: string
+  project_id: string
+  source: string
+  source_id: string
+  level: string
+  message: string
+  created_at: string
 }
 
 export interface Deployment {
