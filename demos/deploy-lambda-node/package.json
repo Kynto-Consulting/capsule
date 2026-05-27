@@ -1,0 +1,9 @@
+{
+  "name": "capsule-lambda-node-demo",
+  "version": "1.0.0",
+  "description": "Node.js Lambda demo for Capsule",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -e \"require('./index').handler({requestContext:{http:{method:'GET',path:'/'}}}).then(r=>console.log(r))\""
+  }
+}
