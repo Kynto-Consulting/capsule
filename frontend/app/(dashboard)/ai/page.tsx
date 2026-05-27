@@ -161,7 +161,7 @@ function PlaygroundTab({
       const res = await api.post<{ choices: Array<{ message: { content: string } }> }>(
         '/api/v1/ai/chat',
         {
-          model: selectedModelId || 'claude-sonnet-4',
+          model: selectedModelId || 'claude-sonnet-4.5',
           messages: nextHistory.map(h => ({ role: h.role, content: h.content })),
         },
         token
@@ -654,7 +654,7 @@ function APIKeysTab({ token }: { token: string }) {
               <div className="ml-4">
                 <span className="text-[#9cdcfe]">model</span>
                 <span className="text-[#d4d4d4]">=</span>
-                <span className="text-[#ce9178]">&quot;claude-sonnet-4&quot;</span>
+                <span className="text-[#ce9178]">&quot;claude-sonnet-4.5&quot;</span>
                 <span className="text-[#d4d4d4]">,</span>
               </div>
               <div className="ml-4">
