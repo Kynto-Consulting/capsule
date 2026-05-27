@@ -5,6 +5,7 @@ import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/rea
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { PageSpinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
@@ -231,18 +232,12 @@ function AddDomainModal({
         </div>
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-[--text-secondary]">Project</label>
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Project"
+            value={projectId}
+            onChange={(v) => setProjectId(v)}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+          />
 
           <Input
             label="Domain name"
@@ -251,17 +246,15 @@ function AddDomainModal({
             onChange={(e) => setDomainName(e.target.value)}
           />
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-[--text-secondary]">DNS provider</label>
-            <select
-              value={dnsProvider}
-              onChange={(e) => setDnsProvider(e.target.value as 'route53' | 'external')}
-              className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
-            >
-              <option value="external">External (manual CNAME)</option>
-              <option value="route53">AWS Route 53</option>
-            </select>
-          </div>
+          <Select
+            label="DNS provider"
+            value={dnsProvider}
+            onChange={(v) => setDnsProvider(v as 'route53' | 'external')}
+            options={[
+              { value: 'external', label: 'External (manual CNAME)' },
+              { value: 'route53', label: 'AWS Route 53' },
+            ]}
+          />
         </div>
 
         {error && <p className="text-xs text-[--danger]">{error}</p>}

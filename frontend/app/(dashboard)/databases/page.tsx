@@ -223,14 +223,14 @@ function AddDatabaseModal({
           <Select
             label="Project"
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={(v) => setProjectId(v)}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
           />
 
           <Select
             label="Engine"
             value={engine}
-            onChange={(e) => setEngine(e.target.value as 'postgres' | 'mysql')}
+            onChange={(v) => setEngine(v as 'postgres' | 'mysql')}
             options={[
               { value: 'postgres', label: 'PostgreSQL' },
               { value: 'mysql', label: 'MySQL' },

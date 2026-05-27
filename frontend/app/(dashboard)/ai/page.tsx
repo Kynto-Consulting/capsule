@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { PageSpinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/lib/api'
@@ -158,11 +159,18 @@ function PlaygroundTab({
     setChatHistory(nextHistory)
     setIsSending(true)
     try {
+      // Strip leading assistant messages — Nova/Bedrock requires first message to be user
+      const apiMessages = nextHistory
+        .map(h => ({ role: h.role, content: h.content }))
+        .filter((_, i, arr) => {
+          const firstUser = arr.findIndex(m => m.role === 'user')
+          return i >= firstUser
+        })
       const res = await api.post<{ choices: Array<{ message: { content: string } }> }>(
         '/api/v1/ai/chat',
         {
           model: selectedModelId || 'nova-lite',
-          messages: nextHistory.map(h => ({ role: h.role, content: h.content })),
+          messages: apiMessages,
         },
         token
       )
@@ -186,17 +194,12 @@ function PlaygroundTab({
           {modelsLoading ? (
             <span className="text-xs text-[--text-muted]">Loading…</span>
           ) : (
-            <select
+            <Select
               value={selectedModelId}
-              onChange={e => setSelectedModelId(e.target.value)}
-              className="text-xs font-semibold bg-[--bg-raised] border border-[--border] text-[--text-primary] rounded-full px-3 py-1 focus:outline-none focus:border-[--border-focus] cursor-pointer"
-            >
-              {models.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.provider})
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setSelectedModelId(v)}
+              options={models.map(m => ({ value: m.id, label: `${m.name} (${m.provider})` }))}
+              className="w-56"
+            />
           )}
         </div>
 

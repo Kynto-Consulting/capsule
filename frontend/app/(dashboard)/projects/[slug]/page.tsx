@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge, statusToBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { PageSpinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
@@ -687,20 +688,18 @@ function SettingsTab({ project, token, orgId, onSaved, onDeleted }: { project: P
         <Input label="Name" value={name} onChange={e => setName(e.target.value)} />
         <Input label="Repository URL" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
         <Input label="Branch" value={branch} onChange={e => setBranch(e.target.value)} />
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-[--text-secondary]">Runtime</label>
-          <select
-            value={runtime}
-            onChange={e => setRuntime(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
-          >
-            <option value="">Auto-detect</option>
-            <option value="go">Go</option>
-            <option value="node">Node.js</option>
-            <option value="python">Python</option>
-            <option value="rust">Rust</option>
-          </select>
-        </div>
+        <Select
+          label="Runtime"
+          value={runtime}
+          onChange={(v) => setRuntime(v)}
+          options={[
+            { value: 'go', label: 'Go' },
+            { value: 'node', label: 'Node.js' },
+            { value: 'python', label: 'Python' },
+            { value: 'rust', label: 'Rust' },
+          ]}
+          placeholder="Auto-detect"
+        />
         <Input label="Replicas" type="number" value={replicas} onChange={e => setReplicas(e.target.value)} />
         {error && <p className="text-xs text-[--danger]">{error}</p>}
         {success && <p className="text-xs text-green-400">Saved successfully.</p>}
@@ -1071,17 +1070,15 @@ function DomainsTab({ project, token, orgId }: { project: Project; token: string
                   onChange={e => setHostname(e.target.value.toLowerCase())}
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-[--text-secondary]">DNS provider</label>
-                <select
-                  value={provider}
-                  onChange={e => setProvider(e.target.value as 'external' | 'route53')}
-                  className="px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors h-9"
-                >
-                  <option value="external">External (manual CNAME)</option>
-                  <option value="route53">Route 53 (auto)</option>
-                </select>
-              </div>
+              <Select
+                label="DNS provider"
+                value={provider}
+                onChange={(v) => setProvider(v as 'external' | 'route53')}
+                options={[
+                  { value: 'external', label: 'External (manual CNAME)' },
+                  { value: 'route53', label: 'Route 53 (auto)' },
+                ]}
+              />
             </div>
             {addError && <p className="text-xs text-[--error]">{addError}</p>}
             <div className="flex gap-2">
@@ -1433,28 +1430,26 @@ function LogsTab({ project, token, orgId, deployments }: { project: Project; tok
 
         <div className="flex items-center gap-2">
           {logType === 'build' && (
-            <select
+            <Select
               value={selectedDeploy}
-              onChange={e => setSelectedDeploy(e.target.value)}
-              className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
-            >
-              <option value="">Select deployment…</option>
-              {deployments.map(d => (
-                <option key={d.id} value={d.id}>{d.version} — {d.status}</option>
-              ))}
-            </select>
+              onChange={(v) => setSelectedDeploy(v)}
+              placeholder="Select deployment…"
+              options={deployments.map(d => ({ value: d.id, label: `${d.version} — ${d.status}` }))}
+              className="w-48"
+            />
           )}
 
-          <select
+          <Select
             value={filterLevel}
-            onChange={e => setFilterLevel(e.target.value as any)}
-            className="text-xs bg-[--bg-raised] border border-[--border] text-[--text-primary] px-2 py-1 rounded"
-          >
-            <option value="all">All levels</option>
-            <option value="info">INFO</option>
-            <option value="warn">WARN</option>
-            <option value="error">ERROR</option>
-          </select>
+            onChange={(v) => setFilterLevel(v as 'all' | 'info' | 'warn' | 'error')}
+            options={[
+              { value: 'all', label: 'All levels' },
+              { value: 'info', label: 'INFO' },
+              { value: 'warn', label: 'WARN' },
+              { value: 'error', label: 'ERROR' },
+            ]}
+            className="w-36"
+          />
 
           <button
             onClick={() => setAutoRefresh(v => !v)}

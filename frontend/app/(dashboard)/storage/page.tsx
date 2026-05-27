@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { PageSpinner } from '@/components/ui/spinner'
 import { usePageTitle } from '@/lib/use-page-title'
 import { useAuthStore } from '@/stores/auth'
@@ -237,19 +238,13 @@ export default function StoragePage() {
 						<div className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 space-y-4">
 							<h3 className="font-semibold text-sm text-[--text-primary]">Provision New Bucket</h3>
 							
-							<div className="space-y-1">
-								<label className="text-[10px] font-medium text-[--text-muted]">Select Project</label>
-								<select
-									value={selectedProject}
-									onChange={e => setSelectedProject(e.target.value)}
-									className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none"
-								>
-									<option value="">Choose a project...</option>
-									{projects.map(p => (
-										<option key={p.id} value={p.id}>{p.name}</option>
-									))}
-								</select>
-							</div>
+							<Select
+								label="Select Project"
+								value={selectedProject}
+								onChange={(v) => setSelectedProject(v)}
+								placeholder="Choose a project..."
+								options={projects.map(p => ({ value: p.id, label: p.name }))}
+							/>
 
 							<Input
 								label="Bucket Name Reference"

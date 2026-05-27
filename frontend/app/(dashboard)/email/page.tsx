@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { PageSpinner } from '@/components/ui/spinner'
 import { usePageTitle } from '@/lib/use-page-title'
 import { useAuthStore } from '@/stores/auth'
@@ -234,11 +235,12 @@ function DomainsSection({ emails, projects, token, onAddDomain }: {
           </Button>
           {showAdd && (
             <div className="mt-3 space-y-2">
-              <select value={newProject} onChange={e => setNewProject(e.target.value)}
-                className="w-full h-9 px-2.5 text-xs bg-[--bg-surface] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus]">
-                <option value="">Select project…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <Select
+                value={newProject}
+                onChange={(v) => setNewProject(v)}
+                placeholder="Select project…"
+                options={projects.map(p => ({ value: p.id, label: p.name }))}
+              />
               <Input placeholder="yourdomain.com" value={newDomain} onChange={e => setNewDomain(e.target.value.toLowerCase())} className="h-8 text-xs" />
               <Button size="sm" className="w-full" disabled={!newProject || !newDomain}
                 onClick={() => { const p = projects.find(x => x.id === newProject); if (p) { onAddDomain(p.orgId, p.id, newDomain); setShowAdd(false); setNewDomain(''); setNewProject('') } }}>

@@ -376,7 +376,7 @@ function CreateProjectModal({ token, orgId, onSuccess, onClose }: { token: strin
           <Select
             label="Runtime"
             value={runtime}
-            onChange={e => setRuntime(e.target.value)}
+            onChange={(v) => setRuntime(v)}
             options={[
               { value: 'go', label: 'Go' },
               { value: 'node', label: 'Node.js' },
