@@ -3,8 +3,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div
       className="relative min-h-full flex items-center justify-center p-4 bg-grid overflow-hidden"
       style={{
-        '--border': 'rgba(255, 255, 255, 0.035)',
-        '--border-strong': 'rgba(255, 255, 255, 0.06)',
+        '--border': 'rgba(124, 58, 237, 0.16)',
+        '--border-strong': 'rgba(124, 58, 237, 0.28)',
+        '--border-focus': 'rgba(167, 139, 250, 0.55)',
       } as React.CSSProperties}
     >
       {/* Ambient glow blobs */}

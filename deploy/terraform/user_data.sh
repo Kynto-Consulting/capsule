@@ -34,6 +34,17 @@ aws s3 cp s3://capsule-artifacts-348973061281/config/.env .env --region us-east-
 aws ecr get-login-password --region us-east-1 \
   | docker login --username AWS --password-stdin 348973061281.dkr.ecr.us-east-1.amazonaws.com
 
+# Build the backend locally so the running binary always matches the checked-out repo.
+BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+COMMIT=$(git rev-parse --short HEAD)
+docker build \
+  --file backend/Dockerfile \
+  --build-arg VERSION=dev \
+  --build-arg COMMIT=$COMMIT \
+  --build-arg BUILD_DATE=$BUILD_DATE \
+  --tag 348973061281.dkr.ecr.us-east-1.amazonaws.com/capsule/server:latest \
+  backend
+
 # Build the frontend locally so the browser bundle picks up production URLs.
 # Use plain docker build because the AMI ships an older buildx plugin.
 docker build \
