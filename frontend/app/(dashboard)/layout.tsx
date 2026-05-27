@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Sidebar } from '@/components/layout/sidebar'
 import { useAuthStore } from '@/stores/auth'
 import { PageSpinner } from '@/components/ui/spinner'
@@ -56,7 +57,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="ml-3 text-sm font-semibold text-[--text-primary] tracking-tight">Capsule</span>
+          <Image src="/logo.png" alt="Capsule" width={22} height={22} className="ml-3 rounded flex-shrink-0" />
+          <span className="ml-2 text-sm font-semibold text-[--text-primary] tracking-tight">Capsule</span>
         </header>
 
         <main className="flex-1 overflow-y-auto">{children}</main>

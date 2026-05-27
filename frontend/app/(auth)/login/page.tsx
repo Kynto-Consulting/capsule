@@ -38,9 +38,6 @@ export default function LoginPage() {
     <div className="glass rounded-[--radius-xl] p-8 shadow-[--shadow]">
       {/* Brand */}
       <div className="mb-8 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-[--radius-lg] bg-[--accent-dim] border border-[--border-strong] mb-4">
-          <CapsuleIcon />
-        </div>
         <h1 className="text-xl font-semibold text-[--text-primary]">Welcome back</h1>
         <p className="text-sm text-[--text-muted] mt-1">Sign in to your Capsule workspace</p>
       </div>
@@ -86,11 +83,3 @@ export default function LoginPage() {
   )
 }
 
-function CapsuleIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-[--accent-light]">
-      <path d="M3 7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
-      <path d="M12 3v18M3 12h18" strokeOpacity="0.4" />
-    </svg>
-  )
-}

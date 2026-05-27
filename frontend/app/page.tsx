@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuthStore } from '@/stores/auth'
 
 const features = [
@@ -73,6 +74,7 @@ export default function LandingPage() {
         style={{ borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-8">
+          <Image src="/logo.png" alt="Capsule" width={28} height={28} className="rounded-md flex-shrink-0" priority />
           <span className="font-bold text-lg tracking-tight text-[--text-primary]">Capsule</span>
           <div className="hidden md:flex items-center gap-6 text-sm text-[--text-secondary]">
             <a href="#features" className="hover:text-[--text-primary] transition-colors">Features</a>
