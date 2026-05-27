@@ -12,7 +12,7 @@ import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
-import type { Project, EnvVar, Deployment, BuildLog, ExecutionLog } from '@/lib/types'
+import type { Project, EnvVar, Deployment, BuildLog, ExecutionLog, Domain } from '@/lib/types'
 
 type EnvVarWithValue = EnvVar & { value: string }
 
@@ -55,7 +55,7 @@ export default function ProjectDetailPage() {
   })
   const deployments = deploymentsRes?.data ?? []
 
-  const [tab, setTab] = useState<'overview' | 'deployments' | 'storage' | 'logs' | 'env' | 'settings'>('overview')
+  const [tab, setTab] = useState<'overview' | 'deployments' | 'storage' | 'domains' | 'logs' | 'env' | 'settings'>('overview')
 
   if (orgsLoading || projectsLoading) return <PageSpinner />
   if (!project) return (
@@ -86,6 +86,7 @@ export default function ProjectDetailPage() {
           { key: 'overview',    label: 'Overview',     icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
           { key: 'deployments', label: 'Deployments',  icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> },
           { key: 'storage',     label: 'Storage',      icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> },
+          { key: 'domains',     label: 'Domains',      icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> },
           { key: 'logs',        label: 'Logs',         icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> },
           { key: 'env',         label: 'Env vars',     icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg> },
           { key: 'settings',    label: 'Settings',     icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> },
@@ -117,6 +118,7 @@ export default function ProjectDetailPage() {
         />
       )}
       {tab === 'storage' && <StorageTab project={project} token={token} orgId={orgId!} />}
+      {tab === 'domains' && <DomainsTab project={project} token={token} orgId={orgId!} />}
       {tab === 'logs' && <LogsTab project={project} token={token} orgId={orgId!} deployments={deployments} />}
       {tab === 'env' && (
         <EnvTab
@@ -481,6 +483,197 @@ function StorageTab({ project, token, orgId }: { project: Project; token: string
             )}
           </div>
         ))
+      )}
+    </div>
+  )
+}
+
+function DomainsTab({ project, token, orgId }: { project: Project; token: string; orgId: string }) {
+  const qc = useQueryClient()
+  const [showAdd, setShowAdd] = useState(false)
+  const [hostname, setHostname] = useState('')
+  const [provider, setProvider] = useState<'external' | 'route53'>('external')
+  const [addError, setAddError] = useState('')
+  const [verifying, setVerifying] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const { data: domainsRes, isLoading } = useQuery({
+    queryKey: ['domains', orgId, project.id],
+    queryFn: () => api.get<{ data: Domain[] }>(`/api/v1/orgs/${orgId}/projects/${project.id}/domains`, token),
+    refetchInterval: 15_000,
+  })
+  const domains = domainsRes?.data ?? []
+
+  const addMutation = useMutation({
+    mutationFn: () => api.post(`/api/v1/orgs/${orgId}/projects/${project.id}/domains`, {
+      domain_name: hostname,
+      dns_provider: provider,
+    }, token),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['domains', orgId, project.id] })
+      setHostname('')
+      setShowAdd(false)
+      setAddError('')
+    },
+    onError: (e: Error) => setAddError(e.message),
+  })
+
+  async function handleVerify(domainID: string) {
+    setVerifying(domainID)
+    try {
+      await api.post(`/api/v1/orgs/${orgId}/projects/${project.id}/domains/${domainID}/verify`, {}, token)
+      qc.invalidateQueries({ queryKey: ['domains', orgId, project.id] })
+    } finally {
+      setVerifying(null)
+    }
+  }
+
+  async function handleDelete(domainID: string) {
+    setDeleting(domainID)
+    try {
+      await api.delete(`/api/v1/orgs/${orgId}/projects/${project.id}/domains/${domainID}`, token)
+      qc.invalidateQueries({ queryKey: ['domains', orgId, project.id] })
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const statusVariant = (s: string) => {
+    if (s === 'active') return 'success'
+    if (s === 'failed') return 'error'
+    return 'warning'
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-[--text-primary]">Custom Domains</p>
+          <p className="text-xs text-[--text-muted] mt-0.5">Point a domain at this project via CNAME</p>
+        </div>
+        <Button size="sm" onClick={() => setShowAdd(v => !v)}>
+          {showAdd ? 'Cancel' : '+ Add domain'}
+        </Button>
+      </div>
+
+      {/* Add form */}
+      {showAdd && (
+        <div className="bg-[--bg-surface] border border-[--border] rounded-[--radius-lg] p-4 flex flex-col gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <Input
+                label="Hostname"
+                placeholder="app.yourdomain.com"
+                value={hostname}
+                onChange={e => setHostname(e.target.value.toLowerCase())}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[--text-secondary]">DNS provider</label>
+              <select
+                value={provider}
+                onChange={e => setProvider(e.target.value as any)}
+                className="px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors h-9"
+              >
+                <option value="external">External (manual CNAME)</option>
+                <option value="route53">Route 53 (auto)</option>
+              </select>
+            </div>
+          </div>
+          {addError && <p className="text-xs text-[--error]">{addError}</p>}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => addMutation.mutate()} loading={addMutation.isPending} disabled={!hostname}>
+              Register domain
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {isLoading ? (
+        <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
+          {[1, 2].map((i, idx) => (
+            <div key={i} className={`flex items-center gap-4 px-4 py-3 ${idx > 0 ? 'border-t border-[--border]' : ''}`}>
+              <div className="h-3 w-40 rounded-[--radius-sm] animate-shimmer" />
+              <div className="h-5 w-16 rounded-full animate-shimmer" />
+              <div className="h-3 w-24 rounded-[--radius-sm] animate-shimmer ml-auto" />
+            </div>
+          ))}
+        </div>
+      ) : domains.length === 0 ? (
+        <div className="border border-dashed border-[rgba(255,255,255,0.08)] rounded-[--radius-lg] p-10 flex flex-col items-center gap-3 text-center">
+          <div className="w-10 h-10 rounded-[--radius-lg] bg-[--bg-raised] flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[--text-primary]">No custom domains</p>
+            <p className="text-xs text-[--text-muted] mt-1">Add a domain and point its CNAME to the platform load balancer.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
+          {domains.map((d, i) => (
+            <div key={d.id} className={`${i > 0 ? 'border-t border-[--border]' : ''}`}>
+              <div className="flex items-center gap-3 px-4 py-3">
+                {/* Status indicator */}
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  d.status === 'active' ? 'bg-[--success]' :
+                  d.status === 'failed' ? 'bg-[--error]' :
+                  'bg-[--warning] animate-pulse-dot'
+                }`} />
+                {/* Domain + provider */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono font-medium text-[--text-primary] truncate">{d.domain_name}</span>
+                    <span className="text-[10px] text-[--text-muted] bg-[--bg-overlay] px-1.5 py-0.5 rounded font-mono flex-shrink-0">{d.dns_provider}</span>
+                  </div>
+                  <p className="text-[11px] text-[--text-muted] mt-0.5 truncate font-mono">
+                    CNAME → {d.record_value || 'pending…'}
+                  </p>
+                </div>
+                {/* Status badge */}
+                <Badge variant={statusVariant(d.status)} dot={d.status === 'active'}>
+                  {d.status}
+                </Badge>
+                {/* Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {d.status !== 'active' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      loading={verifying === d.id}
+                      onClick={() => handleVerify(d.id)}
+                    >
+                      Verify
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={deleting === d.id}
+                    onClick={() => handleDelete(d.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+              {/* DNS instructions for pending external domains */}
+              {d.status === 'pending' && d.dns_provider === 'external' && d.record_value && (
+                <div className="mx-4 mb-3 bg-[--bg-raised] rounded-[--radius-sm] border border-[--border] px-4 py-3 font-mono text-[11px] text-[--text-secondary] flex flex-col gap-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[--text-muted]">Add this DNS record at your registrar</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><span className="text-[--text-muted]">Type</span><p className="text-[--text-primary] mt-0.5">CNAME</p></div>
+                    <div><span className="text-[--text-muted]">Name</span><p className="text-[--text-primary] mt-0.5 truncate">{d.domain_name}</p></div>
+                    <div><span className="text-[--text-muted]">Value</span><p className="text-[--text-primary] mt-0.5 truncate">{d.record_value}</p></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

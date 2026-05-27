@@ -4,14 +4,14 @@
 :root {
   /* Backgrounds */
   --bg-base:    #000000;
-  --bg-subtle:  #0a0a0a;
-  --bg-surface: #0d0d0d;
-  --bg-raised:  #1a1a1a;
-  --bg-overlay: #222222;
+  --bg-subtle:  #0c0c0c;
+  --bg-surface: #111111;
+  --bg-raised:  #1e1e1e;
+  --bg-overlay: #262626;
 
   /* Borders — near-invisible, exactly like Vercel */
-  --border:        rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.10);
+  --border:        rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --border-focus:  rgba(124, 58, 237, 0.6);
 
   /* Danger alias (same as error) */

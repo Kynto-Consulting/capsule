@@ -111,3 +111,17 @@ export interface DomainRecord {
   created_at: string
   updated_at: string
 }
+
+export interface Domain {
+  id: string
+  project_id: string
+  domain_name: string
+  record_type: string
+  record_value: string
+  status: string
+  dns_provider: string
+  ssl_enabled: boolean
+  verified_at?: string
+  created_at: string
+  updated_at: string
+}
