@@ -1,0 +1,9 @@
+{
+  "org_id": "a97b371b-ae00-4e95-bd84-c233c3126db8",
+  "project_id": "6f3e6980-720d-4ae6-b63e-d51e014b80c0",
+  "project_name": "static-demo",
+  "org_name": "TUMI AI",
+  "deploy_type": "static",
+  "build_command": "npm run build",
+  "output_dir": "dist"
+}
