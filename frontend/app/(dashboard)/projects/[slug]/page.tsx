@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge, statusToBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -489,13 +489,23 @@ function StorageTab({ project, token, orgId }: { project: Project; token: string
 }
 
 function DomainsTab({ project, token, orgId }: { project: Project; token: string; orgId: string }) {
+  const router = useRouter()
   const qc = useQueryClient()
+  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN ?? 'apps.tumi-ai.com'
+
+  // ── Custom domains ────────────────────────────────────────────────────────
   const [showAdd, setShowAdd] = useState(false)
   const [hostname, setHostname] = useState('')
   const [provider, setProvider] = useState<'external' | 'route53'>('external')
   const [addError, setAddError] = useState('')
   const [verifying, setVerifying] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+
+  // ── Subdomain edit ────────────────────────────────────────────────────────
+  const [editingSlug, setEditingSlug] = useState(false)
+  const [newSlug, setNewSlug] = useState(project.slug)
+  const [slugError, setSlugError] = useState('')
+  const [savingSlug, setSavingSlug] = useState(false)
 
   const { data: domainsRes, isLoading } = useQuery({
     queryKey: ['domains', orgId, project.id],
@@ -538,143 +548,199 @@ function DomainsTab({ project, token, orgId }: { project: Project; token: string
     }
   }
 
-  const statusVariant = (s: string) => {
+  async function handleSaveSlug() {
+    const slug = newSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-')
+    if (!slug || slug === project.slug) { setEditingSlug(false); return }
+    setSavingSlug(true)
+    setSlugError('')
+    try {
+      await api.patch(`/api/v1/orgs/${orgId}/projects/${project.id}`, { slug }, token)
+      qc.invalidateQueries({ queryKey: ['all-projects'] })
+      router.push(`/projects/${slug}`)
+    } catch (e: unknown) {
+      setSlugError(e instanceof Error ? e.message : 'Failed to update subdomain')
+      setSavingSlug(false)
+    }
+  }
+
+  const statusVariant = (s: string): 'success' | 'error' | 'warning' => {
     if (s === 'active') return 'success'
     if (s === 'failed') return 'error'
     return 'warning'
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-[--text-primary]">Custom Domains</p>
-          <p className="text-xs text-[--text-muted] mt-0.5">Point a domain at this project via CNAME</p>
-        </div>
-        <Button size="sm" onClick={() => setShowAdd(v => !v)}>
-          {showAdd ? 'Cancel' : '+ Add domain'}
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
 
-      {/* Add form */}
-      {showAdd && (
-        <div className="bg-[--bg-surface] border border-[--border] rounded-[--radius-lg] p-4 flex flex-col gap-3">
-          <div className="flex gap-3 flex-wrap">
-            <div className="flex-1 min-w-[200px]">
-              <Input
-                label="Hostname"
-                placeholder="app.yourdomain.com"
-                value={hostname}
-                onChange={e => setHostname(e.target.value.toLowerCase())}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-[--text-secondary]">DNS provider</label>
-              <select
-                value={provider}
-                onChange={e => setProvider(e.target.value as any)}
-                className="px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors h-9"
-              >
-                <option value="external">External (manual CNAME)</option>
-                <option value="route53">Route 53 (auto)</option>
-              </select>
-            </div>
-          </div>
-          {addError && <p className="text-xs text-[--error]">{addError}</p>}
-          <div className="flex gap-2">
-            <Button size="sm" onClick={() => addMutation.mutate()} loading={addMutation.isPending} disabled={!hostname}>
-              Register domain
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* List */}
-      {isLoading ? (
-        <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
-          {[1, 2].map((i, idx) => (
-            <div key={i} className={`flex items-center gap-4 px-4 py-3 ${idx > 0 ? 'border-t border-[--border]' : ''}`}>
-              <div className="h-3 w-40 rounded-[--radius-sm] animate-shimmer" />
-              <div className="h-5 w-16 rounded-full animate-shimmer" />
-              <div className="h-3 w-24 rounded-[--radius-sm] animate-shimmer ml-auto" />
-            </div>
-          ))}
-        </div>
-      ) : domains.length === 0 ? (
-        <div className="border border-dashed border-[rgba(255,255,255,0.08)] rounded-[--radius-lg] p-10 flex flex-col items-center gap-3 text-center">
-          <div className="w-10 h-10 rounded-[--radius-lg] bg-[--bg-raised] flex items-center justify-center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-          </div>
+      {/* ── System subdomain ─────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-sm font-medium text-[--text-primary]">No custom domains</p>
-            <p className="text-xs text-[--text-muted] mt-1">Add a domain and point its CNAME to the platform load balancer.</p>
+            <p className="text-sm font-medium text-[--text-primary]">Platform subdomain</p>
+            <p className="text-xs text-[--text-muted] mt-0.5">Auto-assigned — change the slug to update it</p>
           </div>
+          {!editingSlug && (
+            <Button size="sm" variant="secondary" onClick={() => { setEditingSlug(true); setNewSlug(project.slug) }}>
+              Edit subdomain
+            </Button>
+          )}
         </div>
-      ) : (
+
         <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
-          {domains.map((d, i) => (
-            <div key={d.id} className={`${i > 0 ? 'border-t border-[--border]' : ''}`}>
-              <div className="flex items-center gap-3 px-4 py-3">
-                {/* Status indicator */}
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  d.status === 'active' ? 'bg-[--success]' :
-                  d.status === 'failed' ? 'bg-[--error]' :
-                  'bg-[--warning] animate-pulse-dot'
-                }`} />
-                {/* Domain + provider */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-medium text-[--text-primary] truncate">{d.domain_name}</span>
-                    <span className="text-[10px] text-[--text-muted] bg-[--bg-overlay] px-1.5 py-0.5 rounded font-mono flex-shrink-0">{d.dns_provider}</span>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="w-1.5 h-1.5 rounded-full bg-[--success] flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              {editingSlug ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-0 border border-[--border-focus] rounded-[--radius-sm] overflow-hidden">
+                    <input
+                      autoFocus
+                      className="px-3 py-1.5 text-sm font-mono bg-[--bg-base] text-[--text-primary] outline-none w-40"
+                      value={newSlug}
+                      onChange={e => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveSlug(); if (e.key === 'Escape') setEditingSlug(false) }}
+                    />
+                    <span className="px-3 py-1.5 text-sm font-mono text-[--text-muted] bg-[--bg-raised] border-l border-[--border] select-none">
+                      .{appDomain}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-[--text-muted] mt-0.5 truncate font-mono">
-                    CNAME → {d.record_value || 'pending…'}
-                  </p>
-                </div>
-                {/* Status badge */}
-                <Badge variant={statusVariant(d.status)} dot={d.status === 'active'}>
-                  {d.status}
-                </Badge>
-                {/* Actions */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {d.status !== 'active' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      loading={verifying === d.id}
-                      onClick={() => handleVerify(d.id)}
-                    >
-                      Verify
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    loading={deleting === d.id}
-                    onClick={() => handleDelete(d.id)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-              {/* DNS instructions for pending external domains */}
-              {d.status === 'pending' && d.dns_provider === 'external' && d.record_value && (
-                <div className="mx-4 mb-3 bg-[--bg-raised] rounded-[--radius-sm] border border-[--border] px-4 py-3 font-mono text-[11px] text-[--text-secondary] flex flex-col gap-1.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[--text-muted]">Add this DNS record at your registrar</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div><span className="text-[--text-muted]">Type</span><p className="text-[--text-primary] mt-0.5">CNAME</p></div>
-                    <div><span className="text-[--text-muted]">Name</span><p className="text-[--text-primary] mt-0.5 truncate">{d.domain_name}</p></div>
-                    <div><span className="text-[--text-muted]">Value</span><p className="text-[--text-primary] mt-0.5 truncate">{d.record_value}</p></div>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" loading={savingSlug} onClick={handleSaveSlug} disabled={!newSlug || newSlug === project.slug}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setEditingSlug(false); setSlugError('') }}>Cancel</Button>
                   </div>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-sm font-mono font-medium text-[--text-primary]">{project.slug}.{appDomain}</span>
+                  <span className="ml-2 text-[10px] text-[--text-muted] bg-[--bg-overlay] px-1.5 py-0.5 rounded font-mono">system</span>
                 </div>
               )}
+              {slugError && <p className="text-xs text-[--error] mt-1">{slugError}</p>}
+              {!editingSlug && (
+                <p className="text-[11px] text-[--text-muted] mt-0.5 font-mono">CNAME → managed by platform</p>
+              )}
             </div>
-          ))}
+            <Badge variant="success" dot>active</Badge>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Custom domains ────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-medium text-[--text-primary]">Custom domains</p>
+            <p className="text-xs text-[--text-muted] mt-0.5">Point your own domain at this project via CNAME</p>
+          </div>
+          <Button size="sm" onClick={() => setShowAdd(v => !v)}>
+            {showAdd ? 'Cancel' : '+ Add domain'}
+          </Button>
+        </div>
+
+        {/* Add form */}
+        {showAdd && (
+          <div className="bg-[--bg-surface] border border-[--border] rounded-[--radius-lg] p-4 flex flex-col gap-3 mb-3">
+            <div className="flex gap-3 flex-wrap">
+              <div className="flex-1 min-w-[200px]">
+                <Input
+                  label="Hostname"
+                  placeholder="app.yourdomain.com"
+                  value={hostname}
+                  onChange={e => setHostname(e.target.value.toLowerCase())}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-[--text-secondary]">DNS provider</label>
+                <select
+                  value={provider}
+                  onChange={e => setProvider(e.target.value as 'external' | 'route53')}
+                  className="px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors h-9"
+                >
+                  <option value="external">External (manual CNAME)</option>
+                  <option value="route53">Route 53 (auto)</option>
+                </select>
+              </div>
+            </div>
+            {addError && <p className="text-xs text-[--error]">{addError}</p>}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => addMutation.mutate()} loading={addMutation.isPending} disabled={!hostname}>
+                Register domain
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* List */}
+        {isLoading ? (
+          <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
+            {[1, 2].map((i, idx) => (
+              <div key={i} className={`flex items-center gap-4 px-4 py-3 ${idx > 0 ? 'border-t border-[--border]' : ''}`}>
+                <div className="h-3 w-40 rounded-[--radius-sm] animate-shimmer" />
+                <div className="h-5 w-16 rounded-full animate-shimmer" />
+                <div className="h-3 w-24 rounded-[--radius-sm] animate-shimmer ml-auto" />
+              </div>
+            ))}
+          </div>
+        ) : domains.length === 0 ? (
+          <div className="border border-dashed border-[rgba(255,255,255,0.08)] rounded-[--radius-lg] p-8 flex flex-col items-center gap-3 text-center">
+            <div className="w-10 h-10 rounded-[--radius-lg] bg-[--bg-raised] flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[--text-primary]">No custom domains yet</p>
+              <p className="text-xs text-[--text-muted] mt-1">Add a domain and point its CNAME to the platform load balancer.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
+            {domains.map((d, i) => (
+              <div key={d.id} className={`${i > 0 ? 'border-t border-[--border]' : ''}`}>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    d.status === 'active' ? 'bg-[--success]' :
+                    d.status === 'failed' ? 'bg-[--error]' :
+                    'bg-[--warning] animate-pulse-dot'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-medium text-[--text-primary] truncate">{d.domain_name}</span>
+                      <span className="text-[10px] text-[--text-muted] bg-[--bg-overlay] px-1.5 py-0.5 rounded font-mono flex-shrink-0">{d.dns_provider}</span>
+                    </div>
+                    <p className="text-[11px] text-[--text-muted] mt-0.5 truncate font-mono">
+                      CNAME → {d.record_value || 'pending…'}
+                    </p>
+                  </div>
+                  <Badge variant={statusVariant(d.status)} dot={d.status === 'active'}>
+                    {d.status}
+                  </Badge>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {d.status !== 'active' && (
+                      <Button size="sm" variant="outline" loading={verifying === d.id} onClick={() => handleVerify(d.id)}>
+                        Verify
+                      </Button>
+                    )}
+                    <Button size="sm" variant="danger" loading={deleting === d.id} onClick={() => handleDelete(d.id)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+                {d.status === 'pending' && d.dns_provider === 'external' && d.record_value && (
+                  <div className="mx-4 mb-3 bg-[--bg-raised] rounded-[--radius-sm] border border-[--border] px-4 py-3 font-mono text-[11px] text-[--text-secondary] flex flex-col gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[--text-muted]">Add this DNS record at your registrar</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div><span className="text-[--text-muted]">Type</span><p className="text-[--text-primary] mt-0.5">CNAME</p></div>
+                      <div><span className="text-[--text-muted]">Name</span><p className="text-[--text-primary] mt-0.5 truncate">{d.domain_name}</p></div>
+                      <div><span className="text-[--text-muted]">Value</span><p className="text-[--text-primary] mt-0.5 truncate">{d.record_value}</p></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
