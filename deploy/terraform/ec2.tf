@@ -71,6 +71,70 @@ resource "aws_iam_role_policy_attachment" "builder_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Lambda permissions for the builder role
+resource "aws_iam_role_policy" "builder_lambda" {
+  name = "${var.app_name}-builder-lambda-policy"
+  role = aws_iam_role.builder.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "LambdaManage"
+        Effect = "Allow"
+        Action = [
+          "lambda:CreateFunction",
+          "lambda:UpdateFunctionCode",
+          "lambda:GetFunction",
+          "lambda:GetFunctionUrlConfig",
+          "lambda:CreateFunctionUrlConfig",
+          "lambda:UpdateFunctionUrlConfig",
+          "lambda:AddPermission",
+          "lambda:InvokeFunction",
+          "lambda:DeleteFunction",
+          "lambda:ListFunctions"
+        ]
+        Resource = [
+          "arn:aws:lambda:us-east-1:348973061281:*"
+        ]
+      },
+      {
+        Sid    = "PassLambdaRole"
+        Effect = "Allow"
+        Action = "iam:PassRole"
+        Resource = "arn:aws:iam::348973061281:role/${var.app_name}-lambda-role"
+      }
+    ]
+  })
+}
+
+# Execution role assumed by Lambda functions deployed by Capsule
+resource "aws_iam_role" "lambda_execution" {
+  name = "${var.app_name}-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "lambda.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "capsule"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_execution_basic" {
+  role       = aws_iam_role.lambda_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
 resource "aws_iam_instance_profile" "builder" {
   name = "${var.app_name}-builder"
   role = aws_iam_role.builder.name
