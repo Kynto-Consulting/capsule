@@ -20,6 +20,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-348973061281}
+      - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-348973061281}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds
@@ -42,6 +43,7 @@ services:
       - NEXT_PUBLIC_WS_URL=wss://api.tumi-ai.com
       - HOSTNAME=0.0.0.0
       - PORT=3000
+      - BACKEND_INTERNAL_URL=http://capsule-backend:8080
     depends_on:
       - backend
     networks:
