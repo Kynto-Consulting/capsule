@@ -176,9 +176,11 @@ function AWSBillingWidget({ token }: { token: string }) {
           s3_buckets: number
           custom_domains: number
         }
-      }>('/api/v1/aws/billing')
+      }>('/api/v1/aws/billing', token)
       return res
-    }
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   })
 
   if (isLoading || !data) return null

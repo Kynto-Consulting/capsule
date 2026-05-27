@@ -82,6 +82,19 @@ export default function EmailPage() {
 
 	const allEmails = emailSetups ?? []
 
+	// Fetch real SES stats for first configured domain
+	const firstEmail = (emailSetups ?? [])[0] as (EmailSetup & { orgId?: string }) | undefined
+	const { data: statsData } = useQuery({
+		queryKey: ['email-stats', firstEmail?.id],
+		queryFn: () => api.get<{ sent_last_24h: number; quota_24h: number; sending_enabled: boolean }>(
+			`/api/v1/orgs/${(firstEmail as any).orgId}/projects/${firstEmail!.project_id}/email/stats`,
+			token
+		),
+		enabled: !!firstEmail,
+		staleTime: 5 * 60 * 1000,
+		refetchOnWindowFocus: false,
+	})
+
 	// Mutations
 	const setupMutation = useMutation({
 		mutationFn: async ({ orgId, projectId, domainName }: { orgId: string; projectId: string; domainName: string }) => {
@@ -311,24 +324,45 @@ export default function EmailPage() {
 					) : (
 						<div className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 space-y-4">
 							<h3 className="font-semibold text-sm text-[--text-primary]">Outbound Analytics</h3>
-							<div className="space-y-3 font-mono text-xs">
-								<div className="flex justify-between">
-									<span className="text-[--text-muted]">Sent (Last 30d)</span>
-									<span className="font-semibold text-[--text-primary]">1,240</span>
+							{!firstEmail ? (
+								<p className="text-xs text-[--text-muted]">Configure an email domain to see real sending stats.</p>
+							) : (
+								<div className="space-y-3 font-mono text-xs">
+									<div className="flex justify-between">
+										<span className="text-[--text-muted]">Sent (Last 24h)</span>
+										<span className="font-semibold text-[--text-primary]">
+											{statsData ? statsData.sent_last_24h.toLocaleString() : '—'}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-[--text-muted]">Daily Quota</span>
+										<span className="font-semibold text-[--text-secondary]">
+											{statsData ? statsData.quota_24h.toLocaleString() : '—'}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-[--text-muted]">Sending Status</span>
+										<span className={`font-semibold ${statsData?.sending_enabled ? 'text-green-400' : 'text-yellow-400'}`}>
+											{statsData ? (statsData.sending_enabled ? 'enabled' : 'sandbox') : '—'}
+										</span>
+									</div>
+									{statsData && statsData.quota_24h > 0 && (
+										<div>
+											<div className="flex justify-between text-[10px] text-[--text-muted] mb-1">
+												<span>Quota usage</span>
+												<span>{((statsData.sent_last_24h / statsData.quota_24h) * 100).toFixed(1)}%</span>
+											</div>
+											<div className="w-full h-1 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden">
+												<div
+													className="h-full bg-[--accent-light] rounded-full transition-all"
+													style={{ width: `${Math.min((statsData.sent_last_24h / statsData.quota_24h) * 100, 100)}%` }}
+												/>
+											</div>
+										</div>
+									)}
+									<p className="text-[10px] text-[--text-muted]">Source: AWS SES account stats</p>
 								</div>
-								<div className="flex justify-between">
-									<span className="text-[--text-muted]">Delivery Rate</span>
-									<span className="font-semibold text-green-400">99.68%</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-[--text-muted]">Bounce Rate</span>
-									<span className="font-semibold text-yellow-400">0.24%</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-[--text-muted]">Complaint Rate</span>
-									<span className="font-semibold text-red-400">0.08%</span>
-								</div>
-							</div>
+							)}
 						</div>
 					)}
 				</div>
