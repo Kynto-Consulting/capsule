@@ -196,9 +196,12 @@ function AWSBillingWidget({ token }: { token: string }) {
     queryFn: async () => {
       const res = await api.get<{
         total_spend: number
+        projected_month_total: number
         currency: string
         period: string
         remaining_credits: number
+        credits_used: number
+        credits_total: number
         credit_expiration: string
         active_resources: {
           app_servers: number
@@ -206,6 +209,7 @@ function AWSBillingWidget({ token }: { token: string }) {
           s3_buckets: number
           custom_domains: number
         }
+        breakdown: Array<{ service: string; cost: number }>
       }>('/api/v1/aws/billing', token)
       return res
     },
@@ -215,45 +219,70 @@ function AWSBillingWidget({ token }: { token: string }) {
 
   if (isLoading || !data) return null
 
-  const pct = (data.remaining_credits / 1000.0) * 100
+  const creditsTotal = data.credits_total || 5000
+  const usedPct = Math.min(((creditsTotal - data.remaining_credits) / creditsTotal) * 100, 100)
+  const topServices = (data.breakdown ?? []).sort((a, b) => b.cost - a.cost).slice(0, 5)
 
   return (
     <Card className="p-5 mb-6 bg-[rgba(255,255,255,0.01)] border-[rgba(255,255,255,0.05)] shadow-[0_4px_30px_rgba(0,0,0,0.4)] backdrop-blur-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-[--text-muted]">AWS Spend & Credits</h3>
-          <div className="flex items-baseline gap-4 mt-2">
-            <div>
-              <p className="text-2xl font-bold text-[--text-primary] font-mono">${data.total_spend.toFixed(2)}</p>
-              <p className="text-[10px] text-[--text-muted]">Monthly Spend ({data.period})</p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[--text-muted]">AWS Spend & Credits</h3>
+            <div className="flex items-baseline gap-4 mt-2">
+              <div>
+                <p className="text-2xl font-bold text-[--text-primary] font-mono">${data.total_spend.toFixed(2)}</p>
+                <p className="text-[10px] text-[--text-muted]">MTD Spend ({data.period})</p>
+              </div>
+              <div className="h-8 w-[1px] bg-[--border] self-center" />
+              <div>
+                <p className="text-2xl font-bold text-[--accent-light] font-mono">${data.remaining_credits.toFixed(2)}</p>
+                <p className="text-[10px] text-[--text-muted]">Remaining Credits (Exp: {data.credit_expiration})</p>
+              </div>
+              {data.projected_month_total > 0 && (
+                <>
+                  <div className="h-8 w-[1px] bg-[--border] self-center" />
+                  <div>
+                    <p className="text-2xl font-bold text-[rgba(251,191,36,0.9)] font-mono">${data.projected_month_total.toFixed(2)}</p>
+                    <p className="text-[10px] text-[--text-muted]">Projected EOM</p>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="h-8 w-[1px] bg-[--border] self-center" />
-            <div>
-              <p className="text-2xl font-bold text-[--accent-light] font-mono">${data.remaining_credits.toFixed(2)}</p>
-              <p className="text-[10px] text-[--text-muted]">Remaining Credits (Exp: {data.credit_expiration})</p>
+          </div>
+
+          <div className="flex-1 max-w-xs">
+            <div className="flex justify-between text-[10px] text-[--text-secondary] mb-1 font-mono">
+              <span>Credits Used</span>
+              <span>${(creditsTotal - data.remaining_credits).toFixed(2)} / ${creditsTotal.toLocaleString()}</span>
+            </div>
+            <div className="w-full h-1.5 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden border border-[rgba(255,255,255,0.02)]">
+              <div
+                className="h-full bg-gradient-to-r from-[--accent-dim] to-[--accent-light] rounded-full transition-all duration-500"
+                style={{ width: `${usedPct}%` }}
+              />
+            </div>
+            <div className="flex gap-3 mt-3 text-[10px] text-[--text-muted] flex-wrap">
+              <span>{data.active_resources.app_servers} Apps</span>
+              <span>{data.active_resources.rds_databases} DBs</span>
+              <span>{data.active_resources.s3_buckets} Buckets</span>
+              <span>{data.active_resources.custom_domains} Domains</span>
             </div>
           </div>
         </div>
 
-        {/* Progress Bar & Resources */}
-        <div className="flex-1 max-w-md">
-          <div className="flex justify-between text-[10px] text-[--text-secondary] mb-1 font-mono">
-            <span>Credits Consumption</span>
-            <span>{pct.toFixed(1)}% remaining</span>
+        {topServices.length > 0 && (
+          <div className="border-t border-[rgba(255,255,255,0.04)] pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[--text-muted] mb-2">Top Services MTD</p>
+            <div className="flex flex-wrap gap-2">
+              {topServices.map(s => (
+                <span key={s.service} className="text-[10px] font-mono bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] rounded px-2 py-0.5 text-[--text-secondary]">
+                  {s.service.replace('Amazon ', '').replace('AWS ', '')} <span className="text-[--text-primary]">${s.cost.toFixed(2)}</span>
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="w-full h-1.5 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden border border-[rgba(255,255,255,0.02)]">
-            <div 
-              className="h-full bg-gradient-to-r from-[--accent-dim] to-[--accent-light] rounded-full transition-all duration-500" 
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <div className="flex gap-4 mt-3 text-[10px] text-[--text-muted]">
-            <span>🖥️ {data.active_resources.app_servers} Serverless Apps</span>
-            <span>💾 {data.active_resources.rds_databases} Databases</span>
-            <span>🪣 {data.active_resources.s3_buckets} Buckets</span>
-            <span>🌐 {data.active_resources.custom_domains} Domains</span>
-          </div>
-        </div>
+        )}
       </div>
     </Card>
   )
