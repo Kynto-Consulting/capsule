@@ -39,7 +39,7 @@ resource "aws_lb_target_group" "frontend" {
   vpc_id   = data.aws_vpc.default.id
 
   health_check {
-    path                = "/"
+    path                = "/login"
     port                = "3000"
     protocol            = "HTTP"
     matcher             = "200-399"
