@@ -8,11 +8,13 @@ COPY . .
 EXPOSE 3000
 CMD ["bun", "run", "dev"]
 
-FROM base AS deps
+FROM node:22-alpine AS deps
+WORKDIR /app
 COPY package.json bun.lock* ./
-RUN bun install --frozen-lockfile
+RUN npm install --legacy-peer-deps
 
-FROM base AS builder
+FROM node:22-alpine AS builder
+WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=https://api.tumi-ai.com
 ARG NEXT_PUBLIC_WS_URL=wss://api.tumi-ai.com
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
@@ -22,7 +24,7 @@ ENV NEXT_PUBLIC_APP_DOMAIN=${NEXT_PUBLIC_APP_DOMAIN}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun run build
+RUN npm run build
 
 FROM node:20-alpine AS production
 WORKDIR /app
