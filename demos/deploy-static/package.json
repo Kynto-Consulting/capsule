@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Static site demo for Capsule",
   "scripts": {
-    "build": "mkdir -p dist && cp -r src/* dist/ && echo 'Build complete'",
+    "build": "mkdir -p dist && cp -r src/. dist/ && echo 'Build complete'",
     "dev": "npx serve src"
   },
   "devDependencies": {}
