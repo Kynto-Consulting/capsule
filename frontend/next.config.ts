@@ -8,20 +8,25 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
   async rewrites() {
-    return [
-      // ── Apps subdomain proxy ──────────────────────────────────────────────
-      // *.apps.tumi-ai.com/* → backend /_proxy/{subdomain}/*
-      {
-        source: '/:path+',
-        has: [{ type: 'host', value: '(?<subdomain>[^.]+)\\.apps\\.tumi-ai\\.com' }],
-        destination: `${BACKEND_INTERNAL}/_proxy/:subdomain/:path+`,
-      },
-      {
-        source: '/',
-        has: [{ type: 'host', value: '(?<subdomain>[^.]+)\\.apps\\.tumi-ai\\.com' }],
-        destination: `${BACKEND_INTERNAL}/_proxy/:subdomain/`,
-      },
-    ]
+    // beforeFiles = run BEFORE route matching, so subdomain traffic never
+    // hits the dashboard pages.
+    return {
+      beforeFiles: [
+        // *.apps.tumi-ai.com/* → backend /_proxy/{subdomain}/*
+        {
+          source: '/:path+',
+          has: [{ type: 'host', value: '(?<subdomain>[^.]+)\\.apps\\.tumi-ai\\.com' }],
+          destination: `${BACKEND_INTERNAL}/_proxy/:subdomain/:path+`,
+        },
+        {
+          source: '/',
+          has: [{ type: 'host', value: '(?<subdomain>[^.]+)\\.apps\\.tumi-ai\\.com' }],
+          destination: `${BACKEND_INTERNAL}/_proxy/:subdomain/`,
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    }
   },
 }
 
