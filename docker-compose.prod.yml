@@ -20,6 +20,9 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-348973061281}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - capsule-build-cache:/tmp/capsule-builds
     depends_on:
       redis:
         condition: service_healthy
@@ -70,6 +73,8 @@ services:
 
 volumes:
   capsule-redis-data:
+    driver: local
+  capsule-build-cache:
     driver: local
 
 networks:
