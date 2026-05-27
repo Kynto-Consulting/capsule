@@ -11,20 +11,26 @@ import { api } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface AIModelPricing {
+  input_per_1k_tokens: number
+  output_per_1k_tokens: number
+}
+
 interface AIModel {
   id: string
   name: string
   provider: string
+  bedrock_id: string
   description: string
   context_window: number
   max_output: number
-  input_cost_per_1k: number
-  output_cost_per_1k: number
+  pricing: AIModelPricing
   capabilities: {
-    text: boolean
-    code: boolean
-    vision: boolean
-    functions: boolean
+    text_generation: boolean
+    code_generation: boolean
+    vision_analysis: boolean
+    function_calling: boolean
+    streaming: boolean
   }
   tags: string[]
 }
@@ -261,10 +267,10 @@ function PlaygroundTab({
             <div className="flex flex-wrap gap-1.5">
               {(
                 [
-                  { key: 'text', label: 'Text', icon: '📝' },
-                  { key: 'code', label: 'Code', icon: '💻' },
-                  { key: 'vision', label: 'Vision', icon: '👁' },
-                  { key: 'functions', label: 'Functions', icon: '⚙' },
+                  { key: 'text_generation', label: 'Text', icon: '📝' },
+                  { key: 'code_generation', label: 'Code', icon: '💻' },
+                  { key: 'vision_analysis', label: 'Vision', icon: '👁' },
+                  { key: 'function_calling', label: 'Functions', icon: '⚙' },
                 ] as const
               ).map(cap => {
                 const enabled = selectedModel.capabilities[cap.key]
@@ -375,19 +381,19 @@ function ModelsTab({
 
               {/* Pricing */}
               <p className="text-[10px] text-[--text-muted]">
-                Input: <span className="text-[--text-secondary] font-medium">{fmtPrice(m.input_cost_per_1k)} / 1K tokens</span>
+                Input: <span className="text-[--text-secondary] font-medium">{fmtPrice(m.pricing.input_per_1k_tokens)} / 1K tokens</span>
                 {' · '}
-                Output: <span className="text-[--text-secondary] font-medium">{fmtPrice(m.output_cost_per_1k)} / 1K tokens</span>
+                Output: <span className="text-[--text-secondary] font-medium">{fmtPrice(m.pricing.output_per_1k_tokens)} / 1K tokens</span>
               </p>
 
               {/* Capabilities */}
               <div className="flex gap-2">
                 {(
                   [
-                    { key: 'text', label: 'Text', icon: '📝' },
-                    { key: 'code', label: 'Code', icon: '💻' },
-                    { key: 'vision', label: 'Vision', icon: '👁' },
-                    { key: 'functions', label: 'Functions', icon: '⚙' },
+                    { key: 'text_generation', label: 'Text', icon: '📝' },
+                    { key: 'code_generation', label: 'Code', icon: '💻' },
+                    { key: 'vision_analysis', label: 'Vision', icon: '👁' },
+                    { key: 'function_calling', label: 'Functions', icon: '⚙' },
                   ] as const
                 ).map(cap => {
                   const enabled = m.capabilities[cap.key]
