@@ -81,18 +81,26 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[--border] mb-6">
-        {(['overview', 'deployments', 'storage', 'logs', 'env', 'settings'] as const).map(t => (
+      <div className="flex gap-0.5 border-b border-[--border] mb-6">
+        {(([
+          { key: 'overview',    label: 'Overview',     icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
+          { key: 'deployments', label: 'Deployments',  icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> },
+          { key: 'storage',     label: 'Storage',      icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> },
+          { key: 'logs',        label: 'Logs',         icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> },
+          { key: 'env',         label: 'Env vars',     icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg> },
+          { key: 'settings',    label: 'Settings',     icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> },
+        ]) as { key: typeof tab; label: string; icon: React.ReactNode }[]).map(({ key: t, label, icon }) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-2 text-sm font-medium transition-colors -mb-px ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors -mb-px ${
               tab === t
-                ? 'text-[--text-primary] border-b border-[--accent]'
+                ? 'text-[--text-primary] border-b-2 border-[--accent]'
                 : 'text-[--text-muted] hover:text-[--text-secondary]'
             }`}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            <span className="opacity-70">{icon}</span>
+            {label}
           </button>
         ))}
       </div>
@@ -286,7 +294,24 @@ function DeploymentsTab({
     try { await onTrigger() } finally { setTriggering(false) }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><PageSpinner /></div>
+  if (loading) return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <div className="h-7 w-28 rounded-[--radius-sm] animate-shimmer" />
+      </div>
+      <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
+        {[1, 2, 3].map((i, idx) => (
+          <div key={i} className={`flex items-center gap-4 px-4 py-3 ${idx > 0 ? 'border-t border-[--border]' : ''}`}>
+            <div className="h-3 w-16 rounded-[--radius-sm] animate-shimmer" />
+            <div className="h-3 w-28 rounded-[--radius-sm] animate-shimmer" />
+            <div className="h-3 w-14 rounded-[--radius-sm] animate-shimmer" />
+            <div className="h-3 w-12 rounded-[--radius-sm] animate-shimmer ml-auto" />
+            <div className="h-3 w-16 rounded-[--radius-sm] animate-shimmer" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-4">

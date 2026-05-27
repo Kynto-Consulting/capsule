@@ -78,6 +78,7 @@ const nav = [
   {
     label: 'Settings',
     href: '/settings',
+    divider: true,
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -117,21 +118,28 @@ export function Sidebar() {
         {nav.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-2.5 px-3 h-9 rounded-[--radius] text-sm transition-all duration-150',
-                active
-                  ? 'bg-[rgba(255,255,255,0.06)] text-[--text-primary]'
-                  : 'text-[--text-muted] hover:text-[--text-secondary] hover:bg-[rgba(255,255,255,0.04)]',
+            <div key={item.href}>
+              {(item as any).divider && (
+                <div className="my-2 mx-3 h-px bg-[rgba(255,255,255,0.04)]" />
               )}
-            >
-              <span className={cn('flex-shrink-0', active ? 'text-[--text-primary]' : 'text-[--text-muted]')}>
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
+              <Link
+                href={item.href}
+                className={cn(
+                  'relative flex items-center gap-2.5 px-3 h-9 rounded-[--radius] text-sm transition-all duration-150',
+                  active
+                    ? 'bg-[rgba(124,58,237,0.10)] text-[--text-primary]'
+                    : 'text-[--text-muted] hover:text-[--text-secondary] hover:bg-[rgba(255,255,255,0.04)]',
+                )}
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[--accent]" />
+                )}
+                <span className={cn('flex-shrink-0 transition-colors', active ? 'text-[--accent-light]' : 'text-[--text-muted]')}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            </div>
           )
         })}
       </nav>

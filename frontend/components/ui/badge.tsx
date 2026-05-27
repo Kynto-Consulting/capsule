@@ -37,7 +37,12 @@ export function Badge({ variant = 'default', dot, className, children, ...props 
       {...props}
     >
       {dot && (
-        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', dotColors[variant])} />
+        <span className={cn(
+          'w-1.5 h-1.5 rounded-full flex-shrink-0',
+          dotColors[variant],
+          variant === 'info' && 'animate-pulse-dot',
+          variant === 'warning' && 'animate-pulse-dot',
+        )} />
       )}
       {children}
     </span>

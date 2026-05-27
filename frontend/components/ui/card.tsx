@@ -13,10 +13,10 @@ export function Card({ className, hover, glow, children, ...props }: CardProps) 
         hover && [
           'cursor-pointer transition-all duration-200',
           'hover:border-[--border-strong] hover:bg-[--bg-raised]',
-          'hover:shadow-[0_0_24px_rgba(124,58,237,0.1)]',
+          'hover:shadow-[0_4px_24px_rgba(0,0,0,0.4),0_0_24px_rgba(124,58,237,0.12)]',
           'hover:-translate-y-0.5',
         ],
-        glow && 'shadow-[0_0_32px_rgba(124,58,237,0.12)]',
+        glow && 'shadow-[0_0_40px_rgba(124,58,237,0.18),0_4px_16px_rgba(0,0,0,0.5)]',
         className,
       )}
       {...props}

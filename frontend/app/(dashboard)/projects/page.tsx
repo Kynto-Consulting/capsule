@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PageSpinner } from '@/components/ui/spinner'
+import { SkeletonCard } from '@/components/ui/skeleton'
 import { formatRelative, slugify } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs, createOrg } from '@/lib/orgs'
@@ -105,7 +106,9 @@ export default function ProjectsPage() {
 
           {/* Grid */}
           {projectsLoading ? (
-            <div className="flex items-center justify-center h-48"><PageSpinner /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1,2,3].map(i => <SkeletonCard key={i} />)}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {projects.map((project) => (
@@ -122,14 +125,18 @@ export default function ProjectsPage() {
                         {project.status}
                       </Badge>
                     </div>
-                    <div className="flex items-center justify-between mt-auto pt-2 border-t border-[--border]">
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-[4px] ${runtimeColors[project.runtime] ?? 'bg-[--bg-overlay] text-[--text-muted]'}`}>
-                        {project.runtime || 'auto'}
-                      </span>
-                      <div className="flex items-center justify-between mt-auto pt-2 border-t border-[--border]" style={{ borderTop: 'none', paddingTop: 0 }}>
-                        <span className="text-[11px] text-[--text-muted]" style={{ marginRight: '12px' }}>{project.replicas}× replica{project.replicas !== 1 ? 's' : ''}</span>
-                        <span className="text-[11px] text-[--text-muted]">{formatRelative(project.updated_at)}</span>
+                    <div className="flex items-center justify-between mt-auto pt-2 border-t border-[--border] gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-[4px] flex-shrink-0 ${runtimeColors[project.runtime] ?? 'bg-[--bg-overlay] text-[--text-muted]'}`}>
+                          {project.runtime || 'auto'}
+                        </span>
+                        {project.deploy_type && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[4px] flex-shrink-0 bg-[rgba(255,255,255,0.04)] text-[--text-muted]">
+                            {project.deploy_type}
+                          </span>
+                        )}
                       </div>
+                      <span className="text-[11px] text-[--text-muted] flex-shrink-0">{formatRelative(project.updated_at)}</span>
                     </div>
                   </Card>
                 </Link>
