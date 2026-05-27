@@ -63,7 +63,7 @@
 }
 
 /* ── Base ──────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; border-color: var(--border); }
 html { height: 100%; }
 body {
   background-color: var(--bg-base);
