@@ -1,0 +1,4 @@
+{
+  "deploy_type": "lambda",
+  "port": 3000
+}

@@ -1,0 +1,4 @@
+{
+  "deploy_type": "docker",
+  "port": 3000
+}

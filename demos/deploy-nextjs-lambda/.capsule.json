@@ -1,5 +1,0 @@
-{
-  "deploy_type": "lambda",
-  "build_command": "npm install && npm run build && cp lambda-handler.js .next/standalone/",
-  "start_command": "lambda-handler.handler"
-}
