@@ -5,12 +5,14 @@ import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/rea
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { PageSpinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
+import { usePageTitle } from '@/lib/use-page-title'
 import type { Database, ListResponse, Project } from '@/lib/types'
 
 function listDatabases(token: string, orgId: string, projectId: string) {
@@ -40,6 +42,7 @@ interface FlatDatabase extends Database {
 }
 
 export default function DatabasesPage() {
+  usePageTitle('Databases · Capsule')
   const { accessToken } = useAuthStore()
   const token = accessToken!
   const qc = useQueryClient()
@@ -217,30 +220,22 @@ function AddDatabaseModal({
         </div>
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-[--text-secondary]">Project</label>
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Project"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+          />
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-[--text-secondary]">Engine</label>
-            <select
-              value={engine}
-              onChange={(e) => setEngine(e.target.value as 'postgres' | 'mysql')}
-              className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
-            >
-              <option value="postgres">PostgreSQL</option>
-              <option value="mysql">MySQL</option>
-            </select>
-          </div>
+          <Select
+            label="Engine"
+            value={engine}
+            onChange={(e) => setEngine(e.target.value as 'postgres' | 'mysql')}
+            options={[
+              { value: 'postgres', label: 'PostgreSQL' },
+              { value: 'mysql', label: 'MySQL' },
+            ]}
+          />
 
           <Input
             label="Name"

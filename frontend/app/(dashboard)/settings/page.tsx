@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { usePageTitle } from '@/lib/use-page-title'
 
 export default function SettingsPage() {
+	usePageTitle('Settings · Capsule')
 	const router = useRouter()
 	const { user, accessToken, refreshToken, clearAuth } = useAuthStore()
 

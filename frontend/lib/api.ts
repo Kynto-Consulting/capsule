@@ -13,11 +13,18 @@ class APIError extends Error {
   }
 }
 
+let refreshCallback: (() => Promise<string | null>) | null = null
+
+export function setRefreshCallback(fn: () => Promise<string | null>): void {
+  refreshCallback = fn
+}
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  token?: string
+  token?: string,
+  _retried = false
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -31,6 +38,16 @@ async function request<T>(
   })
 
   if (!res.ok) {
+    if (res.status === 401 && !_retried && refreshCallback !== null) {
+      const cb = refreshCallback
+      const newToken = await cb()
+      if (newToken !== null) {
+        return request<T>(method, path, body, newToken, true)
+      }
+      // Refresh failed — clear the callback so we don't loop
+      refreshCallback = null
+    }
+
     const err = await res.json().catch(() => ({ error: { code: 'UNKNOWN', message: res.statusText } }))
     throw new APIError(res.status, err.error?.code ?? 'UNKNOWN', err.error?.message ?? res.statusText)
   }

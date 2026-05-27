@@ -88,7 +88,12 @@ const nav = [
   },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  isMobileOpen: boolean
+  onMobileClose: () => void
+}
+
+export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, accessToken, refreshToken, clearAuth } = useAuthStore()
@@ -105,12 +110,30 @@ export function Sidebar() {
     router.push('/login')
   }
 
-  return (
-    <aside className="flex flex-col w-56 h-full bg-[--bg-subtle]" style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+  const sidebarContent = (
+    <aside
+      className={cn(
+        'flex flex-col w-56 h-full bg-[--bg-subtle]',
+        // Mobile: fixed overlay sliding in from left
+        'fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0',
+        isMobileOpen ? 'translate-x-0' : '-translate-x-full',
+      )}
+      style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 h-14">
+      <div className="flex items-center gap-2.5 px-4 h-14 flex-shrink-0">
         <Image src="/logo.png" alt="Capsule" width={24} height={35} className="flex-shrink-0" />
         <span className="text-sm font-semibold text-[--text-primary] tracking-tight">Capsule</span>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onMobileClose}
+          className="ml-auto md:hidden text-[--text-muted] hover:text-[--text-secondary] transition-colors p-1 rounded"
+          aria-label="Close menu"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
@@ -124,6 +147,7 @@ export function Sidebar() {
               )}
               <Link
                 href={item.href}
+                onClick={onMobileClose}
                 className={cn(
                   'relative flex items-center gap-2.5 px-3 h-9 rounded-[--radius] text-sm transition-all duration-150',
                   active
@@ -145,7 +169,7 @@ export function Sidebar() {
       </nav>
 
       {/* User */}
-      <div className="px-2 py-3">
+      <div className="px-2 py-3 flex-shrink-0">
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-[--radius] hover:bg-[--bg-raised] transition-colors group">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
             {user?.name?.[0]?.toUpperCase() ?? '?'}
@@ -166,5 +190,19 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  )
+
+  return (
+    <>
+      {sidebarContent}
+      {/* Backdrop — mobile only, closes sidebar when tapped */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+    </>
   )
 }

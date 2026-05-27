@@ -10,9 +10,10 @@ import { PageSpinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
-import { api } from '@/lib/api'
+import { api, APIError } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import type { Project, EnvVar, Deployment, BuildLog, ExecutionLog, Domain } from '@/lib/types'
 
 type EnvVarWithValue = EnvVar & { value: string }
@@ -22,6 +23,7 @@ export default function ProjectDetailPage() {
   const { accessToken } = useAuthStore()
   const token = accessToken!
   const qc = useQueryClient()
+  const router = useRouter()
 
   // Find the project by slug across orgs
   const { data: orgsRes, isLoading: orgsLoading } = useQuery({
@@ -68,6 +70,11 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      {/* Breadcrumbs */}
+      <div className="mb-4">
+        <Breadcrumbs items={[{ label: 'Projects', href: '/projects' }, { label: project.name }]} />
+      </div>
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -120,6 +127,9 @@ export default function ProjectDetailPage() {
         <DeploymentsTab
           deployments={deployments}
           loading={deploymentsLoading}
+          project={project}
+          orgId={orgId!}
+          token={token}
           onTrigger={async () => {
             await api.post(`/api/v1/orgs/${orgId}/projects/${project.id}/deployments`, { version: 'manual' }, token)
             qc.invalidateQueries({ queryKey: ['deployments', orgId, project.id] })
@@ -149,6 +159,11 @@ export default function ProjectDetailPage() {
           token={token}
           orgId={orgId!}
           onSaved={() => qc.invalidateQueries({ queryKey: ['all-projects'] })}
+          onDeleted={() => {
+            qc.invalidateQueries({ queryKey: ['all-projects'] })
+            qc.invalidateQueries({ queryKey: ['projects'] })
+            router.push('/projects')
+          }}
         />
       )}
     </div>
@@ -458,14 +473,83 @@ function EnvTab({
   )
 }
 
+interface DeploymentFile {
+  path: string
+  size: number
+  content_type?: string
+}
+
+function DeploymentFilesSection({ orgId, projectId, deploymentId, token }: { orgId: string; projectId: string; deploymentId: string; token: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['deployment-files', orgId, projectId, deploymentId],
+    queryFn: async () => {
+      try {
+        return await api.get<{ data: DeploymentFile[] }>(
+          `/api/v1/orgs/${orgId}/projects/${projectId}/deployments/${deploymentId}/files`,
+          token,
+        )
+      } catch (e: unknown) {
+        if (e instanceof APIError && e.status === 404) return null
+        throw e
+      }
+    },
+    staleTime: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="px-4 pb-3">
+        <div className="bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] p-3 flex flex-col gap-1.5">
+          {[1, 2, 3].map(i => <div key={i} className="h-3 rounded animate-shimmer" style={{ width: `${40 + i * 15}%` }} />)}
+        </div>
+      </div>
+    )
+  }
+
+  const files = data?.data ?? null
+
+  return (
+    <div className="px-4 pb-3">
+      {data === null ? (
+        <p className="text-xs text-[--text-muted] italic">File manifest not available for this deployment.</p>
+      ) : !files || files.length === 0 ? (
+        <p className="text-xs text-[--text-muted] italic">No files found for this deployment.</p>
+      ) : (
+        <div className="bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] overflow-hidden">
+          {files.map((f, i) => (
+            <div key={f.path} className={`flex items-center gap-3 px-3 py-1.5 ${i > 0 ? 'border-t border-[--border]' : ''}`}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[--text-muted] flex-shrink-0">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span className="text-[11px] font-mono text-[--text-secondary] flex-1 truncate">{f.path}</span>
+              <span className="text-[10px] text-[--text-muted] flex-shrink-0 tabular-nums">{formatFileSize(f.size)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p className="text-xs text-[--error] mt-1">{(error as Error).message}</p>}
+    </div>
+  )
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function DeploymentsTab({
-  deployments, loading, onTrigger,
+  deployments, loading, project, orgId, token, onTrigger,
 }: {
   deployments: Deployment[]
   loading: boolean
+  project: Project
+  orgId: string
+  token: string
   onTrigger: () => Promise<void>
 }) {
   const [triggering, setTriggering] = useState(false)
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
 
   const statusColor: Record<string, string> = {
     queued:    'text-[--text-muted]',
@@ -480,6 +564,16 @@ function DeploymentsTab({
     setTriggering(true)
     try { await onTrigger() } finally { setTriggering(false) }
   }
+
+  function toggleFiles(id: string) {
+    setExpandedFiles(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const supportsFiles = project.deploy_type === 'static' || project.deploy_type === 'lambda'
 
   if (loading) return (
     <div className="flex flex-col gap-4">
@@ -513,16 +607,49 @@ function DeploymentsTab({
       ) : (
         <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
           {deployments.map((d, i) => (
-            <div key={d.id} className={`flex items-center gap-4 px-4 py-3 ${i > 0 ? 'border-t border-[--border]' : ''}`}>
-              <span className={`text-xs font-medium w-20 ${statusColor[d.status] ?? 'text-[--text-muted]'}`}>
-                {d.status}
-              </span>
-              <span className="text-xs font-mono text-[--text-muted] w-32 truncate">{d.version}</span>
-              {d.git_sha && (
-                <span className="text-xs font-mono text-[--text-muted]">{d.git_sha.slice(0, 7)}</span>
+            <div key={d.id} className={i > 0 ? 'border-t border-[--border]' : ''}>
+              <div className="flex items-center gap-4 px-4 py-3">
+                <span className={`text-xs font-medium w-20 ${statusColor[d.status] ?? 'text-[--text-muted]'}`}>
+                  {d.status}
+                </span>
+                <span className="text-xs font-mono text-[--text-muted] w-32 truncate">{d.version}</span>
+                {d.git_sha && (
+                  <span className="text-xs font-mono text-[--text-muted]">{d.git_sha.slice(0, 7)}</span>
+                )}
+                <span className="text-xs text-[--text-muted] ml-auto">{d.trigger}</span>
+                <span className="text-xs text-[--text-muted] w-20 text-right">{formatRelative(d.created_at)}</span>
+                {supportsFiles && (
+                  <button
+                    onClick={() => toggleFiles(d.id)}
+                    title="View deployed files"
+                    className={`flex items-center gap-1 text-[10px] transition-colors px-1.5 py-0.5 rounded ${
+                      expandedFiles.has(d.id)
+                        ? 'text-[--accent-light] bg-[--accent-dim]'
+                        : 'text-[--text-muted] hover:text-[--text-secondary]'
+                    }`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    Files
+                    <svg
+                      width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round"
+                      className={`transition-transform ${expandedFiles.has(d.id) ? 'rotate-180' : ''}`}
+                    >
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {supportsFiles && expandedFiles.has(d.id) && (
+                <DeploymentFilesSection
+                  orgId={orgId}
+                  projectId={project.id}
+                  deploymentId={d.id}
+                  token={token}
+                />
               )}
-              <span className="text-xs text-[--text-muted] ml-auto">{d.trigger}</span>
-              <span className="text-xs text-[--text-muted] w-20 text-right">{formatRelative(d.created_at)}</span>
             </div>
           ))}
         </div>
@@ -531,7 +658,7 @@ function DeploymentsTab({
   )
 }
 
-function SettingsTab({ project, token, orgId, onSaved }: { project: Project; token: string; orgId: string; onSaved: () => void }) {
+function SettingsTab({ project, token, orgId, onSaved, onDeleted }: { project: Project; token: string; orgId: string; onSaved: () => void; onDeleted: () => void }) {
   const [name, setName] = useState(project.name)
   const [repoUrl, setRepoUrl] = useState(project.repo_url ?? '')
   const [branch, setBranch] = useState(project.branch)
@@ -539,6 +666,9 @@ function SettingsTab({ project, token, orgId, onSaved }: { project: Project; tok
   const [replicas, setReplicas] = useState(String(project.replicas))
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => api.patch(
@@ -551,28 +681,113 @@ function SettingsTab({ project, token, orgId, onSaved }: { project: Project; tok
   })
 
   return (
-    <div className="max-w-md flex flex-col gap-4">
-      <Input label="Name" value={name} onChange={e => setName(e.target.value)} />
-      <Input label="Repository URL" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
-      <Input label="Branch" value={branch} onChange={e => setBranch(e.target.value)} />
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-[--text-secondary]">Runtime</label>
-        <select
-          value={runtime}
-          onChange={e => setRuntime(e.target.value)}
-          className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
-        >
-          <option value="">Auto-detect</option>
-          <option value="go">Go</option>
-          <option value="node">Node.js</option>
-          <option value="python">Python</option>
-          <option value="rust">Rust</option>
-        </select>
+    <div className="flex flex-col gap-8 max-w-md">
+      {/* General settings */}
+      <div className="flex flex-col gap-4">
+        <Input label="Name" value={name} onChange={e => setName(e.target.value)} />
+        <Input label="Repository URL" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
+        <Input label="Branch" value={branch} onChange={e => setBranch(e.target.value)} />
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-[--text-secondary]">Runtime</label>
+          <select
+            value={runtime}
+            onChange={e => setRuntime(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-[--bg-base] border border-[--border] rounded-[--radius-sm] text-[--text-primary] outline-none focus:border-[--border-focus] transition-colors"
+          >
+            <option value="">Auto-detect</option>
+            <option value="go">Go</option>
+            <option value="node">Node.js</option>
+            <option value="python">Python</option>
+            <option value="rust">Rust</option>
+          </select>
+        </div>
+        <Input label="Replicas" type="number" value={replicas} onChange={e => setReplicas(e.target.value)} />
+        {error && <p className="text-xs text-[--danger]">{error}</p>}
+        {success && <p className="text-xs text-green-400">Saved successfully.</p>}
+        <Button onClick={() => mutate()} loading={isPending}>Save changes</Button>
       </div>
-      <Input label="Replicas" type="number" value={replicas} onChange={e => setReplicas(e.target.value)} />
-      {error && <p className="text-xs text-[--danger]">{error}</p>}
-      {success && <p className="text-xs text-green-400">Saved successfully.</p>}
-      <Button onClick={() => mutate()} loading={isPending}>Save changes</Button>
+
+      {/* Danger Zone */}
+      <div className="border border-[rgba(239,68,68,0.25)] rounded-[--radius-lg] p-4 flex flex-col gap-3">
+        <p className="text-sm font-semibold text-[--error]">Danger Zone</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-[--text-primary]">Delete project</p>
+            <p className="text-xs text-[--text-muted] mt-0.5 leading-relaxed">
+              This action is irreversible. All deployments, databases, and resources will be permanently removed.
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            size="sm"
+            className="flex-shrink-0"
+            onClick={() => setShowDeleteModal(true)}
+          >
+            Delete project
+          </Button>
+        </div>
+      </div>
+
+      {showDeleteModal && (
+        <DeleteProjectModal
+          projectSlug={project.slug}
+          onConfirm={async () => {
+            await api.delete(`/api/v1/orgs/${orgId}/projects/${project.id}`, token)
+            onDeleted()
+          }}
+          onClose={() => setShowDeleteModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function DeleteProjectModal({ projectSlug, onConfirm, onClose }: { projectSlug: string; onConfirm: () => Promise<void>; onClose: () => void }) {
+  const [confirmText, setConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function handleDelete() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await onConfirm()
+    } catch (e: unknown) {
+      setDeleteError(e instanceof Error ? e.message : 'Failed to delete project')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-[--bg-surface] border border-[rgba(239,68,68,0.3)] rounded-[--radius-lg] p-6 shadow-2xl">
+        <h2 className="text-base font-semibold text-[--text-primary] mb-1">Delete project</h2>
+        <p className="text-sm text-[--text-muted] mb-4 leading-relaxed">
+          This action is irreversible. All deployments, databases, and resources will be permanently removed.
+          Type <span className="font-mono text-[--text-primary] bg-[--bg-raised] px-1 rounded">{projectSlug}</span> to confirm.
+        </p>
+        <div className="flex flex-col gap-3">
+          <Input
+            placeholder={projectSlug}
+            value={confirmText}
+            onChange={e => setConfirmText(e.target.value)}
+            autoFocus
+          />
+          {deleteError && <p className="text-xs text-[--error]">{deleteError}</p>}
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="danger"
+              onClick={handleDelete}
+              loading={deleting}
+              disabled={confirmText !== projectSlug}
+            >
+              Delete project
+            </Button>
+            <Button variant="ghost" onClick={onClose} disabled={deleting}>Cancel</Button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -758,7 +973,11 @@ function DomainsTab({ project, token, orgId }: { project: Project; token: string
     setSlugError('')
     try {
       await api.patch(`/api/v1/orgs/${orgId}/projects/${project.id}`, { slug }, token)
-      qc.invalidateQueries({ queryKey: ['all-projects'] })
+      // Invalidate ALL project-related queries before navigating so the new
+      // page doesn't flash "not found" due to stale cache data.
+      await qc.invalidateQueries({ queryKey: ['orgs'] })
+      await qc.invalidateQueries({ queryKey: ['all-projects'] })
+      await qc.invalidateQueries({ queryKey: ['projects'] })
       router.push(`/projects/${slug}`)
     } catch (e: unknown) {
       setSlugError(e instanceof Error ? e.message : 'Failed to update subdomain')

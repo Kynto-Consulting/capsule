@@ -11,6 +11,7 @@ import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
+import { usePageTitle } from '@/lib/use-page-title'
 import type { DomainRecord, ListResponse, Project } from '@/lib/types'
 
 function listDomains(token: string, orgId: string, projectId: string) {
@@ -34,6 +35,7 @@ interface FlatDomain extends DomainRecord {
 }
 
 export default function DomainsPage() {
+  usePageTitle('Domains · Capsule')
   const { accessToken } = useAuthStore()
   const token = accessToken!
   const qc = useQueryClient()

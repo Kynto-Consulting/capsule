@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageSpinner } from '@/components/ui/spinner'
+import { usePageTitle } from '@/lib/use-page-title'
 import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
@@ -32,6 +33,7 @@ interface FlatBucket extends S3Bucket {
 }
 
 export default function StoragePage() {
+	usePageTitle('Storage · Capsule')
 	const { accessToken } = useAuthStore()
 	const token = accessToken!
 	const qc = useQueryClient()
