@@ -3,7 +3,7 @@ name: capsule-prod
 services:
   # ── Backend API Server ─────────────────────────────────────
   backend:
-    image: 348973061281.dkr.ecr.us-east-1.amazonaws.com/capsule/server:latest
+    image: capsule-backend:latest
     container_name: capsule-backend
     restart: always
     ports:
