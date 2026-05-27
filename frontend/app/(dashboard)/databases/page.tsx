@@ -105,18 +105,19 @@ export default function DatabasesPage() {
           <PageSpinner />
         </div>
       ) : allDatabases.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-          <div className="w-10 h-10 rounded-[--radius-lg] bg-[--bg-raised] flex items-center justify-center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center bg-[--bg-raised] rounded-[--radius-lg] border border-dashed border-[rgba(255,255,255,0.08)]">
+          <div className="w-12 h-12 rounded-[--radius-lg] bg-[--bg-surface] border border-[--border] flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <ellipse cx="12" cy="5" rx="9" ry="3" />
               <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
               <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3" />
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium text-[--text-primary]">No databases yet</p>
-            <p className="text-xs text-[--text-muted] mt-1">Add a database to get started.</p>
+            <p className="text-sm font-semibold text-[--text-primary]">No databases yet</p>
+            <p className="text-xs text-[--text-muted] mt-1 max-w-xs">Provision a PostgreSQL or MySQL database and link it to one of your projects.</p>
           </div>
+          <Button size="sm" onClick={() => setShowModal(true)}>Create Database</Button>
         </div>
       ) : (
         <div className="rounded-[--radius-lg] border border-[--border] overflow-hidden">

@@ -155,8 +155,19 @@ export default function StoragePage() {
 				{/* Buckets List */}
 				<div className="md:col-span-2 space-y-4">
 					{allBuckets.length === 0 ? (
-						<div className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-8 text-center text-sm text-[--text-muted]">
-							No storage buckets provisioned yet. Click "Create Bucket" to get started.
+						<div className="flex flex-col items-center justify-center py-16 gap-4 text-center bg-[--bg-raised] rounded-[--radius-lg] border border-dashed border-[rgba(255,255,255,0.08)]">
+							<div className="w-12 h-12 rounded-[--radius-lg] bg-[--bg-surface] border border-[--border] flex items-center justify-center">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+									<polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+									<line x1="12" y1="22.08" x2="12" y2="12"/>
+								</svg>
+							</div>
+							<div>
+								<p className="text-sm font-semibold text-[--text-primary]">No storage buckets yet</p>
+								<p className="text-xs text-[--text-muted] mt-1 max-w-xs">Provision an S3 bucket to store media files, backups, and static assets for your projects.</p>
+							</div>
+							<Button size="sm" onClick={() => setIsCreating(true)}>Create Bucket</Button>
 						</div>
 					) : (
 						allBuckets.map(b => {

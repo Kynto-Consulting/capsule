@@ -12,6 +12,7 @@ import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { Project, EnvVar, Deployment, BuildLog, ExecutionLog, Domain } from '@/lib/types'
 
 type EnvVarWithValue = EnvVar & { value: string }
@@ -56,6 +57,7 @@ export default function ProjectDetailPage() {
   const deployments = deploymentsRes?.data ?? []
 
   const [tab, setTab] = useState<'overview' | 'deployments' | 'storage' | 'domains' | 'logs' | 'env' | 'settings'>('overview')
+  function switchTab(t: typeof tab) { setTab(t) }
 
   if (orgsLoading || projectsLoading) return <PageSpinner />
   if (!project) return (
@@ -106,7 +108,14 @@ export default function ProjectDetailPage() {
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab project={project} />}
+      {tab === 'overview' && (
+        <OverviewTab
+          project={project}
+          deployments={deployments}
+          deploymentsLoading={deploymentsLoading}
+          onSwitchTab={switchTab}
+        />
+      )}
       {tab === 'deployments' && (
         <DeploymentsTab
           deployments={deployments}
@@ -146,30 +155,206 @@ export default function ProjectDetailPage() {
   )
 }
 
-function OverviewTab({ project }: { project: Project }) {
-  const stats = [
+function OverviewTab({ project, deployments, deploymentsLoading, onSwitchTab }: {
+  project: Project
+  deployments: Deployment[]
+  deploymentsLoading: boolean
+  onSwitchTab: (tab: 'deployments' | 'storage' | 'domains' | 'logs') => void
+}) {
+  const lastDeploy = deployments[0]
+  const successCount = deployments.filter(d => d.status === 'success').length
+
+  const projectStats = [
+    {
+      label: 'Total Deployments',
+      value: deploymentsLoading ? '—' : String(deployments.length),
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Last Deploy',
+      value: deploymentsLoading ? '—' : (lastDeploy ? formatRelative(lastDeploy.created_at) : 'never'),
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Project Age',
+      value: formatRelative(project.created_at),
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Replicas',
+      value: String(project.replicas),
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      ),
+    },
+  ]
+
+  const projectMeta = [
     { label: 'Status', value: project.status },
     { label: 'Runtime', value: project.runtime || 'auto' },
     { label: 'Branch', value: project.branch },
     { label: 'Build strategy', value: project.build_strategy },
-    { label: 'Replicas', value: String(project.replicas) },
     { label: 'Serverless', value: project.serverless ? 'yes' : 'no' },
   ]
 
+  const deployStatusColor: Record<string, string> = {
+    queued:    'text-[--text-muted]',
+    building:  'text-yellow-400',
+    deploying: 'text-blue-400',
+    success:   'text-green-400',
+    failed:    'text-red-400',
+    cancelled: 'text-[--text-muted]',
+  }
+
+  const resourceLinks = [
+    {
+      tab: 'deployments' as const,
+      label: 'Deployments',
+      description: 'View deploy history and trigger new deploys',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      ),
+    },
+    {
+      tab: 'storage' as const,
+      label: 'Storage',
+      description: 'Manage S3 buckets and credentials',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        </svg>
+      ),
+    },
+    {
+      tab: 'domains' as const,
+      label: 'Domains',
+      description: 'Configure custom domains and SSL',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+      ),
+    },
+    {
+      tab: 'logs' as const,
+      label: 'Logs',
+      description: 'View build, runtime, and function logs',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      ),
+    },
+  ]
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      {stats.map(s => (
-        <div key={s.label} className="bg-[--bg-raised] rounded-[--radius-lg] p-4">
-          <p className="text-xs text-[--text-muted] mb-1">{s.label}</p>
-          <p className="text-sm font-medium text-[--text-primary] font-mono">{s.value}</p>
+    <div className="flex flex-col gap-6">
+      {/* Quick Stats */}
+      <div>
+        <p className="text-xs font-semibold text-[--text-muted] uppercase tracking-wide mb-3">Quick Stats</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {projectStats.map(s => (
+            <div key={s.label} className="bg-[--bg-raised] rounded-[--radius-lg] p-4 flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-[--text-muted]">
+                {s.icon}
+                <p className="text-xs text-[--text-muted]">{s.label}</p>
+              </div>
+              <p className="text-base font-semibold text-[--text-primary] font-mono leading-none">{s.value}</p>
+            </div>
+          ))}
         </div>
-      ))}
-      {project.repo_url && (
-        <div className="col-span-full bg-[--bg-raised] rounded-[--radius-lg] p-4">
-          <p className="text-xs text-[--text-muted] mb-1">Repository</p>
-          <p className="text-sm font-medium text-[--text-primary] font-mono truncate">{project.repo_url}</p>
+      </div>
+
+      {/* Recent Activity */}
+      <div>
+        <p className="text-xs font-semibold text-[--text-muted] uppercase tracking-wide mb-3">Recent Activity</p>
+        <div className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] overflow-hidden">
+          {deploymentsLoading ? (
+            <div className="flex flex-col gap-0">
+              {[1, 2, 3].map((i, idx) => (
+                <div key={i} className={`flex items-center gap-4 px-4 py-3 ${idx > 0 ? 'border-t border-[--border]' : ''}`}>
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-3 w-20 ml-auto" />
+                </div>
+              ))}
+            </div>
+          ) : deployments.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-[--text-muted]">No deployments yet.</div>
+          ) : (
+            deployments.slice(0, 3).map((d, i) => (
+              <div key={d.id} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-[--border]' : ''}`}>
+                <span className={`text-xs font-semibold w-20 ${deployStatusColor[d.status] ?? 'text-[--text-muted]'}`}>
+                  {d.status}
+                </span>
+                <span className="text-xs font-mono text-[--text-secondary] flex-1 truncate">{d.version}</span>
+                {d.git_sha && (
+                  <span className="text-xs font-mono text-[--text-muted]">{d.git_sha.slice(0, 7)}</span>
+                )}
+                <span className="text-xs text-[--text-muted] ml-auto flex-shrink-0">{formatRelative(d.created_at)}</span>
+              </div>
+            ))
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Resource Links */}
+      <div>
+        <p className="text-xs font-semibold text-[--text-muted] uppercase tracking-wide mb-3">Resource Links</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {resourceLinks.map(({ tab, label, description, icon }) => (
+            <button
+              key={tab}
+              onClick={() => onSwitchTab(tab)}
+              className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 flex flex-col gap-2 text-left hover:border-[--border-focus] hover:bg-[rgba(255,255,255,0.04)] transition-all group"
+            >
+              <div className="text-[--accent] group-hover:text-[--accent-light] transition-colors">{icon}</div>
+              <div>
+                <p className="text-sm font-medium text-[--text-primary]">{label}</p>
+                <p className="text-xs text-[--text-muted] mt-0.5 leading-relaxed">{description}</p>
+              </div>
+              <svg className="mt-auto ml-auto text-[--text-muted] group-hover:text-[--accent] transition-colors" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Config details */}
+      <div>
+        <p className="text-xs font-semibold text-[--text-muted] uppercase tracking-wide mb-3">Configuration</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {projectMeta.map(s => (
+            <div key={s.label} className="bg-[--bg-raised] rounded-[--radius-lg] p-4">
+              <p className="text-xs text-[--text-muted] mb-1">{s.label}</p>
+              <p className="text-sm font-medium text-[--text-primary] font-mono">{s.value}</p>
+            </div>
+          ))}
+          {project.repo_url && (
+            <div className="col-span-full bg-[--bg-raised] rounded-[--radius-lg] p-4">
+              <p className="text-xs text-[--text-muted] mb-1">Repository</p>
+              <p className="text-sm font-medium text-[--text-primary] font-mono truncate">{project.repo_url}</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -436,54 +621,72 @@ function StorageTab({ project, token, orgId }: { project: Project; token: string
     }
   }
 
-  if (isLoading) return <PageSpinner />
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-semibold text-[--text-primary]">Project S3 Buckets</h3>
       </div>
 
-      {buckets.length === 0 ? (
+      {isLoading && (
+        <div className="flex flex-col gap-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                  <Skeleton className="h-3.5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <Skeleton className="h-8 w-full rounded-[--radius-sm]" />
+              <div className="flex justify-end">
+                <Skeleton className="h-7 w-24 rounded-[--radius-sm]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && buckets.length === 0 && (
         <div className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-6 text-center text-xs text-[--text-muted]">
           No S3 buckets bound to this project yet. Create one from the sidebar "Storage" page.
         </div>
-      ) : (
-        buckets.map(b => (
-          <div key={b.id} className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 space-y-2">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="font-mono text-xs font-semibold text-[--text-primary]">{b.db_name}</span>
-                <span className="text-[10px] text-[--text-muted] block mt-0.5">Reference: {b.name} | Endpoint: {b.host}</span>
-              </div>
-              <Badge variant={b.status === 'available' ? 'success' : 'warning'}>{b.status}</Badge>
-            </div>
-
-            <div className="flex justify-end">
-              <Button size="sm" variant="outline" onClick={() => handleShowCreds(b)}>
-                {selectedBucketCreds === b.id ? 'Hide Keys' : 'View Keys'}
-              </Button>
-            </div>
-
-            {selectedBucketCreds === b.id && creds && (
-              <div className="bg-[--bg-surface] rounded-[--radius-sm] border border-[--border] p-3 space-y-2 font-mono text-[10px] text-[--text-secondary]">
-                <div className="flex justify-between">
-                  <span>S3_BUCKET</span>
-                  <span className="text-[--text-primary]">{b.db_name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>S3_ACCESS_KEY</span>
-                  <span className="text-[--text-primary]">{creds.key}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>S3_SECRET_KEY</span>
-                  <span className="text-[--text-primary] truncate max-w-[200px]">{creds.secret}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        ))
       )}
+
+      {!isLoading && buckets.map(b => (
+        <div key={b.id} className="bg-[--bg-raised] rounded-[--radius-lg] border border-[--border] p-4 space-y-2">
+          <div className="flex justify-between items-center">
+            <div>
+              <span className="font-mono text-xs font-semibold text-[--text-primary]">{b.db_name}</span>
+              <span className="text-[10px] text-[--text-muted] block mt-0.5">Reference: {b.name} | Endpoint: {b.host}</span>
+            </div>
+            <Badge variant={b.status === 'available' ? 'success' : 'warning'}>{b.status}</Badge>
+          </div>
+
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => handleShowCreds(b)}>
+              {selectedBucketCreds === b.id ? 'Hide Keys' : 'View Keys'}
+            </Button>
+          </div>
+
+          {selectedBucketCreds === b.id && creds && (
+            <div className="bg-[--bg-surface] rounded-[--radius-sm] border border-[--border] p-3 space-y-2 font-mono text-[10px] text-[--text-secondary]">
+              <div className="flex justify-between">
+                <span>S3_BUCKET</span>
+                <span className="text-[--text-primary]">{b.db_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>S3_ACCESS_KEY</span>
+                <span className="text-[--text-primary]">{creds.key}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>S3_SECRET_KEY</span>
+                <span className="text-[--text-primary] truncate max-w-[200px]">{creds.secret}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -675,9 +878,9 @@ function DomainsTab({ project, token, orgId }: { project: Project; token: string
           <div className="border border-[--border] rounded-[--radius-lg] overflow-hidden">
             {[1, 2].map((i, idx) => (
               <div key={i} className={`flex items-center gap-4 px-4 py-3 ${idx > 0 ? 'border-t border-[--border]' : ''}`}>
-                <div className="h-3 w-40 rounded-[--radius-sm] animate-shimmer" />
-                <div className="h-5 w-16 rounded-full animate-shimmer" />
-                <div className="h-3 w-24 rounded-[--radius-sm] animate-shimmer ml-auto" />
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-3 w-24 ml-auto" />
               </div>
             ))}
           </div>
