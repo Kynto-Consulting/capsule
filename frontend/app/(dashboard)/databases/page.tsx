@@ -191,7 +191,15 @@ export default function DatabasesPage() {
       )}
 
       {selectedDb && (
-        <DatabasePanel db={selectedDb} onClose={() => setSelectedDb(null)} />
+        <DatabasePanel
+          db={selectedDb}
+          token={token}
+          onClose={() => setSelectedDb(null)}
+          onDeleted={() => {
+            qc.invalidateQueries({ queryKey: ['databases-org', selectedDb.orgId] })
+            setSelectedDb(null)
+          }}
+        />
       )}
     </div>
   )
@@ -461,12 +469,29 @@ conn, _ := pgx.Connect(ctx, "postgresql://capsuleadmin:YOUR_PASSWORD@${h}:${p}/$
 
 // ─── Database detail panel ────────────────────────────────────────────────────
 
-function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void }) {
+function DatabasePanel({ db, token, onClose, onDeleted }: {
+  db: FlatDatabase
+  token: string
+  onClose: () => void
+  onDeleted: () => void
+}) {
   const [activeLang, setActiveLang] = useState(0)
   const [copied, setCopied] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const client = ENGINE_CLIENTS[db.engine]
   const host = db.host || ''
   const port = db.port || client?.port || 0
+
+  async function handleDelete() {
+    if (!confirm(`Delete database "${db.name}"? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      await api.delete(`/api/v1/orgs/${db.orgId}/databases/${db.id}`, token)
+      onDeleted()
+    } catch {
+      setDeleting(false)
+    }
+  }
 
   function copy(text: string, key: string) {
     navigator.clipboard.writeText(text).then(() => {
@@ -480,9 +505,10 @@ function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void 
     || (host && port ? buildClientUrl(db.engine, host, port, db.name) : '')
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
       <div
-        className="w-full max-w-xl h-full bg-[--bg-surface] border-l border-[--border] shadow-[--shadow] overflow-y-auto flex flex-col"
+        className="w-full max-w-xl h-full overflow-y-auto flex flex-col border-l border-[--border]"
+        style={{ background: '#141414' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -494,7 +520,13 @@ function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void 
               <p className="text-[11px] text-[--text-muted] capitalize">{client?.label ?? db.engine} · {db.status}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-[--text-muted] hover:text-[--text-secondary] transition-colors text-xl leading-none">&times;</button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" loading={deleting} onClick={handleDelete}
+              className="text-[--danger] border-[--danger]/30 hover:bg-[--danger]/10">
+              Delete
+            </Button>
+            <button onClick={onClose} className="text-[--text-muted] hover:text-[--text-secondary] transition-colors text-xl leading-none ml-1">&times;</button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-5 p-6">
