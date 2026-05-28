@@ -126,8 +126,11 @@ The Capsule CLI lets you deploy, manage, and monitor your infrastructure from th
 **Via npm (Node.js 18+, no Go required):**
 
 ```bash
-npm install -g capsule-cli
+npm install -g @kyntocg/capsule-cli
 ```
+
+> Runs on any OS with Node 18+ via WebAssembly — no Go toolchain needed.
+> [`@kyntocg/capsule-cli` on npm](https://www.npmjs.com/package/@kyntocg/capsule-cli)
 
 **Via Go (native binary, fastest):**
 
