@@ -48,6 +48,7 @@ credentials.json
 # Capsule local configs
 # ──────────────────────────────────────────────
 .capsule/
+.capsule.json
 capsule.local.yaml
 capsule.local.yml
 
