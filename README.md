@@ -117,6 +117,89 @@ cd cli && go build -o ../bin/capsule ./cmd/capsule
 
 ---
 
+## CLI
+
+The Capsule CLI lets you deploy, manage, and monitor your infrastructure from the terminal or CI/CD pipelines.
+
+### Install
+
+**Via npm (Node.js 18+, no Go required):**
+
+```bash
+npm install -g capsule-cli
+```
+
+**Via Go (native binary, fastest):**
+
+```bash
+go install github.com/kynto-consulting/capsule/cli/cmd/capsule@latest
+```
+
+**From source:**
+
+```bash
+cd cli && go build -o capsule ./cmd/capsule
+```
+
+### Quick usage
+
+```bash
+# Log in
+capsule login
+
+# Set up and deploy the current directory (auto-detects stack)
+capsule deploy
+
+# Scaffold AI/CI config into any project
+capsule init
+
+# Tail runtime logs
+capsule logs runtime
+
+# Manage environment variables
+capsule env set DATABASE_URL=postgres://...
+capsule env list
+
+# List deployments
+capsule deployments list
+
+# Manage databases
+capsule databases list
+```
+
+### Zero-config deploys
+
+`capsule deploy` auto-detects the stack from your project files and injects a minimal Dockerfile if one is not present:
+
+| File found       | Stack detected     | Base image                          |
+|------------------|--------------------|-------------------------------------|
+| `Dockerfile`     | Custom             | As-is                               |
+| `go.mod`         | Go                 | `gcr.io/distroless/static`          |
+| `next.config.*`  | Next.js            | `node:20-alpine` (multi-stage)      |
+| `package.json`   | Node.js            | `node:20-alpine`                    |
+| `requirements.txt` | Python           | `python:3.12-slim`                  |
+| `Gemfile`        | Ruby               | `ruby:3.3-slim`                     |
+| `pom.xml`        | Java (Maven)       | `eclipse-temurin:21-jre-alpine`     |
+
+### `capsule init`
+
+Scaffolds editor and CI config files into any project:
+
+```bash
+cd my-project
+capsule init
+```
+
+Creates:
+- `.claude/CLAUDE.md` — Claude Code context (deploy commands, env vars)
+- `.github/workflows/capsule-deploy.yml` — GitHub Actions auto-deploy on push to `main`
+- `.cursor/rules/capsule.mdc` — Cursor AI rules
+- Adds `.capsule.json` to `.gitignore`
+
+Use `capsule init --force` to overwrite existing files.
+
+---
+
 ## Environment Variables
 
 All backend configuration is read from environment variables. Copy `backend/.env.example` to `backend/.env` and fill in the required values.

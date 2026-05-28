@@ -2,11 +2,11 @@
 # Capsule Makefile
 # ──────────────────────────────────────────────────────────────
 .PHONY: all build test lint dev clean help \
-        build-backend build-frontend build-cli \
+        build-backend build-frontend build-cli build-wasm \
         test-backend test-frontend test-cli \
         lint-backend lint-frontend lint-cli \
         docker-build docker-up docker-down \
-        migrate-up migrate-down
+        migrate-up migrate-down npm-publish
 
 # ──────────────────────────────────────────────
 # Variables
@@ -36,10 +36,19 @@ build-backend: ## Build the Go backend server
 	cd backend && $(GO) build $(GOFLAGS) $(LDFLAGS) -o ../$(BIN_DIR)/capsule-server ./cmd/server
 	@echo "✅ Backend built → $(BIN_DIR)/capsule-server"
 
-build-cli: ## Build the Go CLI
+build-cli: ## Build the Go CLI (native binary)
 	@echo "🔨 Building CLI..."
 	cd cli && $(GO) build $(GOFLAGS) $(LDFLAGS) -o ../$(BIN_DIR)/capsule ./cmd/capsule
 	@echo "✅ CLI built → $(BIN_DIR)/capsule"
+
+build-wasm: ## Compile CLI to WASM for the npm package
+	@echo "🔨 Building CLI WASM..."
+	cd cli && GOOS=js GOARCH=wasm $(GO) build -o ../npm/capsule.wasm ./cmd/capsule
+	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" npm/wasm_exec.js
+	@echo "✅ WASM built → npm/capsule.wasm ($(shell du -sh npm/capsule.wasm | cut -f1))"
+
+npm-publish: build-wasm ## Build WASM and publish capsule-cli to npm
+	cd npm && npm publish --access public
 
 build-frontend: ## Build the Next.js frontend
 	@echo "🔨 Building frontend..."

@@ -9,6 +9,7 @@
 *.test
 *.out
 bin/
+!npm/bin/
 vendor/
 
 # ──────────────────────────────────────────────
@@ -33,6 +34,10 @@ yarn-error.log*
 # ──────────────────────────────────────────────
 # Environment & Secrets
 # ──────────────────────────────────────────────
+npm/.npmrc
+npm/capsule.wasm
+npm/wasm_exec.js
+npm/wasm_exec_node.js
 .env
 .env.local
 .env.development.local
