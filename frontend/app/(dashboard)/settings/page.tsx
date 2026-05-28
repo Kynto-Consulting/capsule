@@ -10,6 +10,7 @@ import { PageSpinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/lib/api'
 import { usePageTitle } from '@/lib/use-page-title'
+import { toast } from '@/lib/toast'
 
 interface OrgMember {
   user_id: string
@@ -57,20 +58,33 @@ function MembersSection({ orgId, token, currentUserId }: {
       setInviteEmail('')
       setInviteRole('member')
       setInviteError('')
+      toast.success('Member invited successfully')
+      setTimeout(() => inviteMutation.reset(), 4000)
     },
-    onError: (e: Error) => setInviteError(e.message),
+    onError: (e: Error) => {
+      setInviteError(e.message)
+      toast.error(e?.message ?? 'Operation failed')
+    },
   })
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.patch(`/api/v1/orgs/${orgId}/members/${userId}`, { role }, token),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['members', orgId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['members', orgId] })
+      toast.success('Role updated')
+    },
+    onError: (err: any) => { toast.error(err?.message ?? 'Operation failed') },
   })
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) =>
       api.delete(`/api/v1/orgs/${orgId}/members/${userId}`, token),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['members', orgId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['members', orgId] })
+      toast.success('Member removed')
+    },
+    onError: (err: any) => { toast.error(err?.message ?? 'Operation failed') },
   })
 
   return (
@@ -335,7 +349,7 @@ export default function SettingsPage() {
         <div className="px-5 py-4 space-y-1">
           <p className="text-[10px] text-[--text-muted] uppercase tracking-wide">Endpoint</p>
           <p className="text-xs text-[--text-secondary] font-mono">
-            {process.env.NEXT_PUBLIC_API_URL ?? 'https://api.tumi-ai.com'}
+            {process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'}
           </p>
         </div>
       </section>

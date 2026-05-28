@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import { formatRelative } from '@/lib/utils'
 import { usePageTitle } from '@/lib/use-page-title'
 import type { DomainRecord, ListResponse, Organization, Project } from '@/lib/types'
@@ -84,7 +85,10 @@ export default function DomainsPage() {
         {},
         token
       )
+      toast.success('Domain verified successfully')
       qc.invalidateQueries({ queryKey: ['domains', d.orgId] })
+    } catch {
+      toast.error('Domain verification failed — check your DNS records')
     } finally {
       setVerifying(null)
     }
@@ -224,7 +228,10 @@ function AddDomainModal({
       )
     },
     onSuccess: () => onCreated(orgId),
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => {
+      setError(e.message)
+      toast.error(e.message ?? 'Failed to add domain')
+    },
   })
 
   return (

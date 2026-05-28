@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import { formatRelative } from '@/lib/utils'
 import { usePageTitle } from '@/lib/use-page-title'
 import type { Database, ListResponse, Project, Organization } from '@/lib/types'
@@ -79,6 +80,11 @@ export default function DatabasesPage() {
       queryKey: ['databases-org', org.id],
       queryFn: () => listOrgDatabases(token, org.id),
       enabled: orgs.length > 0,
+      refetchInterval: (_query: unknown) => {
+        const q = _query as { state?: { data?: { data?: Database[] } } }
+        const dbs = q?.state?.data?.data ?? []
+        return dbs.some((d) => d.status === 'provisioning') ? 5000 : false
+      },
     })),
   })
 
@@ -256,7 +262,10 @@ function AddDatabaseModal({
       )
     },
     onSuccess: () => onCreated(orgId),
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => {
+      setError(e.message)
+      toast.error(e.message ?? 'Failed to create database')
+    },
   })
 
   return (
@@ -560,8 +569,10 @@ function DatabasePanel({ db, token, onClose, onDeleted }: {
     setDeleting(true)
     try {
       await api.delete(`/api/v1/orgs/${db.orgId}/databases/${db.id}`, token)
+      toast.success('Database deleted')
       onDeleted()
     } catch {
+      toast.error('Failed to delete database')
       setDeleting(false)
     }
   }

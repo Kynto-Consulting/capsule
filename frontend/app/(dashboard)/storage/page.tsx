@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/auth'
 import { listOrgs } from '@/lib/orgs'
 import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
+import { toast } from '@/lib/toast'
 
 interface S3Bucket {
 	id: string
@@ -42,6 +43,7 @@ export default function StoragePage() {
 	const [newBucketName, setNewBucketName] = useState('')
 	const [selectedProject, setSelectedProject] = useState('')
 	const [activeBucketCreds, setActiveBucketCreds] = useState<{ id: string; key: string; secret: string } | null>(null)
+	const [credsError, setCredsError] = useState<string | null>(null)
 	const [isCreating, setIsCreating] = useState(false)
 
 	// Fetch Orgs & Projects
@@ -89,6 +91,7 @@ export default function StoragePage() {
 			setNewBucketName('')
 			setIsCreating(false)
 		},
+		onError: () => { toast.error('Failed to create bucket') },
 	})
 
 	const deleteMutation = useMutation({
@@ -99,6 +102,7 @@ export default function StoragePage() {
 			qc.invalidateQueries({ queryKey: ['all-s3-buckets'] })
 			setActiveBucketCreds(null)
 		},
+		onError: () => { toast.error('Failed to delete bucket') },
 	})
 
 	async function fetchCredentials(b: FlatBucket) {
@@ -106,23 +110,19 @@ export default function StoragePage() {
 			setActiveBucketCreds(null)
 			return
 		}
+		setCredsError(null)
 		try {
 			const res = await api.get<{ aws_access_key: string; aws_secret_key: string }>(
 				`/api/v1/orgs/${b.orgId}/projects/${b.project_id}/storage/${b.id}`,
 				token
 			)
-			setActiveBucketCreds({
-				id: b.id,
-				key: res.aws_access_key || 'AKIAXXXXXXXXXXXXXXXX',
-				secret: res.aws_secret_key || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-			})
+			if (!res.aws_access_key) {
+				setCredsError('Credentials not available yet — bucket may still be provisioning.')
+				return
+			}
+			setActiveBucketCreds({ id: b.id, key: res.aws_access_key, secret: res.aws_secret_key })
 		} catch {
-			// fallback mock
-			setActiveBucketCreds({
-				id: b.id,
-				key: 'AKIAXXXXXXXXXXXXXXXX',
-				secret: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-			})
+			setCredsError('Failed to load credentials. Check your permissions.')
 		}
 	}
 
@@ -209,6 +209,10 @@ export default function StoragePage() {
 											{hasCreds ? 'Hide Credentials' : 'Show Credentials'}
 										</Button>
 									</div>
+
+									{!hasCreds && credsError && (
+										<p className="text-xs text-red-400">{credsError}</p>
+									)}
 
 									{hasCreds && activeBucketCreds && (
 										<div className="bg-[--bg-surface] rounded-[--radius-sm] border border-[--border] p-3 space-y-2 font-mono text-[11px]">
