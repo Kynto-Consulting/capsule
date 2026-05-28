@@ -551,7 +551,7 @@ export default function EmailPage() {
   const { accessToken } = useAuthStore()
   const token = accessToken!
   const qc = useQueryClient()
-  const [section, setSection] = useState<Section>('domains')
+  const [section, setSection] = useState<Section>('overview')
 
   const { data: orgsRes, isLoading: orgsLoading } = useQuery({
     queryKey: ['orgs'],

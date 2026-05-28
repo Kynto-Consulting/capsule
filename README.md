@@ -3,262 +3,237 @@
 ```
   ██████╗ █████╗ ██████╗ ███████╗██╗   ██╗██╗     ███████╗
  ██╔════╝██╔══██╗██╔══██╗██╔════╝██║   ██║██║     ██╔════╝
- ██║     ███████║██████╔╝███████╗██║   ██║██║     █████╗  
- ██║     ██╔══██║██╔═══╝ ╚════██║██║   ██║██║     ██╔══╝  
+ ██║     ███████║██████╔╝███████╗██║   ██║██║     █████╗
+ ██║     ██╔══██║██╔═══╝ ╚════██║██║   ██║██║     ██╔══╝
  ╚██████╗██║  ██║██║     ███████║╚██████╔╝███████╗███████╗
   ╚═════╝╚═╝  ╚═╝╚═╝     ╚══════╝ ╚═════╝ ╚══════╝╚══════╝
 ```
 
 **Your infrastructure, encapsulated.**
 
-[![CI](https://github.com/Kynto/capsule/actions/workflows/ci.yml/badge.svg)](https://github.com/Kynto/capsule/actions/workflows/ci.yml)
-[![Release](https://github.com/Kynto/capsule/actions/workflows/release.yml/badge.svg)](https://github.com/Kynto/capsule/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Kynto/capsule)](https://goreportcard.com/report/github.com/Kynto/capsule)
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/Kynto/capsule/actions/workflows/ci.yml/badge.svg)](https://github.com/Kynto/capsule/actions/workflows/ci.yml)
 
 </div>
 
 ---
 
-## ✨ Features
-
-- 🚀 **One-Command Deployments** — Deploy your infrastructure with a single `capsule deploy` command
-- 📦 **Environment Capsules** — Package your entire environment as a versioned, shareable capsule
-- 🖥️ **Web Dashboard** — Beautiful real-time dashboard for monitoring and management
-- ⌨️ **Powerful CLI** — Full-featured command-line tool for power users and CI/CD pipelines
-- 🔐 **Secure by Default** — JWT auth, encrypted secrets, least-privilege IAM policies
-- 📊 **Real-Time Monitoring** — Live logs, metrics, and deployment status via WebSocket
-- 🔄 **Rolling Updates** — Zero-downtime deployments with automatic rollback
-- 🏗️ **Infrastructure as Code** — Define environments declaratively with version control
-- 👥 **Team Collaboration** — Multi-tenant workspaces with role-based access control
-- ☁️ **AWS Native** — Deep integration with AWS services (EC2, RDS, S3, and more)
+Capsule is a self-hosted cloud infrastructure management platform that lets teams deploy containerized applications, provision managed databases and S3 storage, configure custom domains, set up transactional email, run background workers and cron jobs, and access AI-assisted tooling — all through a unified web dashboard, REST API, and CLI. It runs on AWS and is designed to be deployed on a single EC2 instance with Docker Compose.
 
 ---
 
-## 🚀 Quick Start
+## Features
 
-### Install the CLI
-
-```bash
-# macOS / Linux (Homebrew)
-brew install kynto/tap/capsule
-
-# Direct download (Linux amd64)
-curl -sSL https://github.com/Kynto/capsule/releases/latest/download/capsule-linux-amd64 -o capsule
-chmod +x capsule && sudo mv capsule /usr/local/bin/
-
-# Windows (Scoop)
-scoop bucket add kynto https://github.com/Kynto/scoop-bucket
-scoop install capsule
-
-# Go install
-go install github.com/Kynto/capsule/cli/cmd/capsule@latest
-```
-
-### Authenticate
-
-```bash
-capsule auth login
-# Opens browser → enter the device code displayed in your terminal
-```
-
-### Create Your First Environment
-
-```bash
-# Create an environment
-capsule env create my-app --description "Production environment"
-
-# Check status
-capsule env status my-app
-
-# Deploy
-capsule deploy --env my-app --config capsule.yaml
-```
+- **Deployments** — Build and deploy Docker containers from source archives; stream build logs in real time; cancel or roll back with one command
+- **Databases** — Provision and manage AWS RDS instances per project; connection strings delivered securely
+- **Storage** — Create and manage S3 buckets per project with pre-signed URL support
+- **Custom Domains** — Attach custom domains to projects with CNAME/A-record verification and ALB routing
+- **Email** — Configure AWS SES per project, verify domains, view DNS records, send transactional email, and inspect delivery logs
+- **Workers** — Long-running background processes managed alongside deployments
+- **Cron Jobs** — Scheduled tasks with execution logs and manual trigger support
+- **AI Assistance** — Bedrock-backed chat, Dockerfile generation, failure explanation, and cost-optimization suggestions
+- **Billing** — AWS spend and credits tracking dashboard
+- **Multi-tenant** — Organizations and projects with JWT-authenticated access
+- **Reverse Proxy** — Automatic subdomain and custom-domain routing to deployed apps
 
 ---
 
-## ⌨️ CLI Usage
+## Architecture
 
-```bash
-capsule [command] [subcommand] [flags]
+```
+Browser / CLI
+      │
+      ▼
+┌─────────────────┐     ┌──────────────────────┐
+│  Next.js 14     │────▶│  Go REST API (Chi)   │
+│  Dashboard      │     │  :8080               │
+└─────────────────┘     └──────────┬───────────┘
+                                   │
+               ┌───────────────────┼───────────────────┐
+               ▼                   ▼                   ▼
+        ┌─────────────┐   ┌───────────────┐   ┌────────────────┐
+        │ PostgreSQL  │   │   Redis 7     │   │   AWS          │
+        │ 16          │   │   (cache /    │   │   EC2, ECR,    │
+        └─────────────┘   │    sessions)  │   │   RDS, S3,     │
+                          └───────────────┘   │   SES, ALB,    │
+                                              │   Bedrock      │
+                                              └────────────────┘
 ```
 
-### Core Commands
-
-```bash
-# Authentication
-capsule auth login              # Authenticate with your account
-capsule auth logout             # Clear stored credentials
-capsule auth status             # Check authentication status
-
-# Environments
-capsule env list                # List all environments
-capsule env create <name>       # Create a new environment
-capsule env delete <name>       # Delete an environment
-capsule env status <name>       # Get environment status
-
-# Deployments
-capsule deploy --env <name>     # Deploy to an environment
-capsule deploy status <id>      # Check deployment status
-capsule deploy rollback <id>    # Rollback a deployment
-
-# Logs
-capsule logs <env> --follow     # Stream live logs
-capsule logs <env> --tail 100   # Last 100 log lines
-
-# Configuration
-capsule config set key value    # Set a config value
-capsule config get key          # Get a config value
-capsule config list             # List all config values
-```
-
-### Output Formats
-
-```bash
-# Table (default)
-capsule env list
-
-# JSON (for scripting)
-capsule env list -o json
-
-# YAML
-capsule env list -o yaml
-```
+| Component    | Technology              | Purpose                                      |
+|--------------|-------------------------|----------------------------------------------|
+| **Backend**  | Go 1.22+, Chi router    | REST API, business logic, AWS orchestration  |
+| **Frontend** | Next.js 14, TypeScript  | Web dashboard, real-time log streaming       |
+| **CLI**      | Go 1.22+, Cobra/Viper   | Terminal interface, CI/CD automation         |
+| **Database** | PostgreSQL 16           | Persistent application state                 |
+| **Cache**    | Redis 7                 | Session storage, rate limiting, pub/sub      |
+| **Proxy**    | Traefik (dev) / ALB     | TLS termination, request routing             |
 
 ---
 
-## 🏗️ Architecture
-
-```mermaid
-graph TB
-    subgraph Client
-        CLI["⌨️ CLI (Go)"]
-        Web["🖥️ Dashboard (Next.js)"]
-    end
-
-    subgraph Server
-        API["🔌 REST API (Go)"]
-        WS["📡 WebSocket"]
-    end
-
-    subgraph Data
-        PG["🐘 PostgreSQL"]
-        RD["⚡ Redis"]
-    end
-
-    subgraph Cloud["AWS"]
-        EC2["EC2"]
-        RDS["RDS"]
-        S3["S3"]
-        IAM["IAM"]
-    end
-
-    CLI --> API
-    Web --> API
-    Web --> WS
-    API --> PG
-    API --> RD
-    API --> Cloud
-    WS --> RD
-```
-
-### Component Overview
-
-| Component    | Technology         | Purpose                              |
-|--------------|--------------------|--------------------------------------|
-| **Backend**  | Go 1.22+, Chi      | REST API, WebSocket, business logic  |
-| **Frontend** | Next.js 14, TS     | Web dashboard, real-time monitoring  |
-| **CLI**      | Go 1.22+, Cobra    | Terminal interface, CI/CD automation |
-| **Database** | PostgreSQL 16      | Persistent storage                   |
-| **Cache**    | Redis 7            | Caching, pub/sub, sessions           |
-| **Proxy**    | Traefik            | Reverse proxy, TLS termination       |
-
----
-
-## 🛠️ Development Setup
+## Quick Start
 
 ### Prerequisites
 
-- Go 1.22+
-- Node.js 20+ & pnpm 9+
-- Docker & Docker Compose
-- Make
+- Docker and Docker Compose
+- Git
 
-### Get Started
+### Run locally
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/Kynto/capsule.git
 cd capsule
 
-# Start infrastructure services
+# 2. Copy and configure environment files
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+
+# 3. Start all services
+docker compose up -d
+
+# Dashboard: http://localhost:3000
+# API:       http://localhost:8080
+# Traefik:   http://localhost:8090
+```
+
+### Run services individually (for development)
+
+```bash
+# Start only the infrastructure dependencies
 docker compose up -d postgres redis
 
 # Run the backend
 cd backend && go run ./cmd/server
 
-# In a new terminal — run the frontend
+# Run the frontend (in a separate terminal)
 cd frontend && pnpm install && pnpm dev
 
-# In a new terminal — build the CLI
+# Build the CLI
 cd cli && go build -o ../bin/capsule ./cmd/capsule
 ```
 
-### Environment Setup
+---
 
-Copy the example files before running locally:
+## Environment Variables
 
-```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.local
+All backend configuration is read from environment variables. Copy `backend/.env.example` to `backend/.env` and fill in the required values.
+
+### Required
+
+| Variable              | Description                                    |
+|-----------------------|------------------------------------------------|
+| `DATABASE_URL`        | PostgreSQL connection URL                      |
+| `CAPSULE_SECRET_KEY`  | JWT signing secret (use a long random string)  |
+
+### Optional — Application
+
+| Variable               | Default                      | Description                                          |
+|------------------------|------------------------------|------------------------------------------------------|
+| `CAPSULE_ENV`          | `development`                | Environment name (`development` or `production`)     |
+| `CAPSULE_PORT`         | `8080`                       | Port the API server listens on                       |
+| `CAPSULE_LOG_LEVEL`    | `info`                       | Log verbosity (`debug`, `info`, `warn`, `error`)     |
+| `REDIS_URL`            | `redis://localhost:6379/0`   | Redis connection URL                                 |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000`      | Comma-separated list of allowed CORS origins         |
+| `RATE_LIMIT_RPS`       | `100`                        | Rate limit — sustained requests per second           |
+| `RATE_LIMIT_BURST`     | `200`                        | Rate limit — burst allowance                         |
+
+### Optional — AWS
+
+| Variable                | Default         | Description                                              |
+|-------------------------|-----------------|----------------------------------------------------------|
+| `AWS_DEFAULT_REGION`    | `us-east-1`     | AWS region for all service calls                         |
+| `AWS_ACCOUNT_ID`        | —               | AWS account ID (used in ECR registry URL construction)   |
+| `ECR_REGISTRY`          | —               | ECR registry hostname for pushing/pulling images         |
+| `ARTIFACTS_BUCKET`      | —               | S3 bucket for build artifact uploads                     |
+
+### Optional — Infrastructure
+
+| Variable                 | Default     | Description                                            |
+|--------------------------|-------------|--------------------------------------------------------|
+| `ALB_DNS_NAME`           | —           | ALB DNS name used for custom domain CNAME targets      |
+| `DB_SUBNET_GROUP`        | `capsule`   | RDS subnet group name for provisioned databases        |
+| `RDS_SECURITY_GROUP_ID`  | —           | Security group ID attached to provisioned RDS instances|
+| `CAPSULE_PUBLIC_HOST`    | —           | Public hostname or IP of this server (shown to users)  |
+| `CAPSULE_APPS_DOMAIN`    | —           | Platform subdomain base for deployed apps              |
+| `CAPSULE_STATIC_BUCKET`  | —           | S3 bucket for static asset hosting                     |
+
+### Frontend
+
+| Variable               | Default                    | Description                               |
+|------------------------|----------------------------|-------------------------------------------|
+| `NEXT_PUBLIC_API_URL`  | `http://localhost:8080`    | Public URL of the backend API             |
+| `NEXT_PUBLIC_WS_URL`   | `ws://localhost:8080`      | Public WebSocket URL of the backend       |
+
+---
+
+## Make Targets
+
 ```
-
-Backend CORS must include the dashboard origin. Use `http://localhost:3000` and `http://127.0.0.1:3000` for local development, and `https://app.tumi-ai.com` in production.
-
-The frontend must receive the public API URL at build time. Use `NEXT_PUBLIC_API_URL=http://localhost:8080` locally and `NEXT_PUBLIC_API_URL=https://api.tumi-ai.com` in production.
-
-### Useful Make Targets
-
-```bash
-make build          # Build all components
-make test           # Run all tests
-make lint           # Run all linters
-make dev            # Start development environment
-make docker-build   # Build Docker images
-make clean          # Clean build artifacts
-make help           # Show all available targets
+make build          Build all components (backend, CLI, frontend)
+make test           Run all tests
+make lint           Run all linters
+make dev            Start PostgreSQL and Redis; print instructions for running backend/frontend
+make dev-all        Start all services via Docker Compose
+make docker-build   Build Docker images
+make docker-up      Start all services with Docker Compose
+make docker-down    Stop all Docker Compose services
+make migrate-up     Run database migrations
+make migrate-down   Rollback last database migration
+make clean          Remove build artifacts
+make help           List all available targets
 ```
 
 ---
 
-## 🤝 Contributing
+## Project Layout
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+```
+capsule/
+├── backend/          Go API server (REST API, business logic, AWS orchestration)
+├── frontend/         Next.js 14 web dashboard
+├── cli/              Go CLI (Cobra-based)
+├── deploy/           Terraform modules and production Docker Compose
+│   └── terraform/    AWS infrastructure as code
+├── demos/            Example applications for testing deployments
+├── docs/             Architecture docs, ADRs, API spec
+└── scripts/          Automation and helper scripts
+```
+
+---
+
+## Documentation
+
+- [Self-Hosting Guide](docs/SELF_HOSTING.md)
+- [API Reference](docs/architecture/API_REFERENCE.md)
+- [CLI Reference](docs/architecture/CLI_REFERENCE.md)
+- [Backend README](backend/README.md)
+- [Deploy README](deploy/README.md)
+- [Contributing](CONTRIBUTING.md)
+
+---
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feat/amazing-feature`)
-5. Open a Pull Request
-
-Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+2. Create a feature branch: `git checkout -b feat/your-feature`
+3. Commit using Conventional Commits: `feat: add amazing feature`
+4. Push and open a Pull Request
 
 ---
 
-## 🔐 Security
+## License
 
-Found a vulnerability? Please see our [Security Policy](SECURITY.md) for responsible disclosure guidelines.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
 <div align="center">
 
-Built with ❤️ by [Kynto](https://github.com/Kynto)
+Built by [Kynto](https://github.com/Kynto)
 
 </div>

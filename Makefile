@@ -141,11 +141,13 @@ docker-logs: ## Tail Docker Compose logs
 # DATABASE
 # ══════════════════════════════════════════════
 
-migrate-up: ## Run database migrations
-	cd backend && $(GO) run ./cmd/server migrate up
+migrate-up: ## Apply migrations (auto-run on server startup; this starts the server to trigger them)
+	@echo "Migrations run automatically on server startup."
+	@echo "To apply migrations, start the server: cd backend && go run ./cmd/server"
 
-migrate-down: ## Rollback last database migration
-	cd backend && $(GO) run ./cmd/server migrate down
+migrate-down: ## Down migrations not supported (write a new .up.sql to reverse changes)
+	@echo "Down migrations are not supported."
+	@echo "Create a new migration to reverse schema changes: make migrate-create NAME=revert_foo"
 
 migrate-create: ## Create a new migration (usage: make migrate-create NAME=create_users)
 	@if [ -z "$(NAME)" ]; then echo "Usage: make migrate-create NAME=migration_name"; exit 1; fi
