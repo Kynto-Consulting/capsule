@@ -13,13 +13,10 @@ import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
 import { usePageTitle } from '@/lib/use-page-title'
-import type { Database, ListResponse, Project } from '@/lib/types'
+import type { Database, ListResponse, Project, Organization } from '@/lib/types'
 
-function listDatabases(token: string, orgId: string, projectId: string) {
-  return api.get<ListResponse<Database>>(
-    `/api/v1/orgs/${orgId}/projects/${projectId}/databases`,
-    token
-  )
+function listOrgDatabases(token: string, orgId: string) {
+  return api.get<ListResponse<Database>>(`/api/v1/orgs/${orgId}/databases`, token)
 }
 
 function dbStatusBadge(status: string): 'success' | 'warning' | 'error' | 'default' {
@@ -31,14 +28,15 @@ function dbStatusBadge(status: string): 'success' | 'warning' | 'error' | 'defau
 
 function engineColor(engine: string): string {
   if (engine === 'postgres') return 'bg-blue-500'
-  if (engine === 'mysql') return 'bg-orange-500'
+  if (engine === 'mysql') return 'bg-orange-400'
+  if (engine === 'redis') return 'bg-red-500'
+  if (engine === 'mongodb') return 'bg-green-500'
   return 'bg-[--text-muted]'
 }
 
 interface FlatDatabase extends Database {
   projectName: string
   orgId: string
-  projectId: string
 }
 
 export default function DatabasesPage() {
@@ -67,28 +65,31 @@ export default function DatabasesPage() {
   )
   const projectsLoading = projectQueries.some((q) => q.isLoading)
 
-  const dbQueries = useQueries({
-    queries: allProjects.map((project) => ({
-      queryKey: ['databases', project.orgId, project.id],
-      queryFn: () => listDatabases(token, project.orgId, project.id),
-      enabled: allProjects.length > 0,
+  // Fetch databases at the org level (includes all + standalone)
+  const orgDbQueries = useQueries({
+    queries: orgs.map((org) => ({
+      queryKey: ['databases-org', org.id],
+      queryFn: () => listOrgDatabases(token, org.id),
+      enabled: orgs.length > 0,
     })),
   })
 
-  const allDatabases: FlatDatabase[] = dbQueries
+  const allDatabases: FlatDatabase[] = orgDbQueries
     .flatMap((q, i) => {
-      const project = allProjects[i]
-      if (!project) return []
-      return (q.data?.data ?? []).map((d) => ({
-        ...d,
-        projectName: project.name,
-        orgId: project.orgId,
-        projectId: project.id,
-      }))
+      const org = orgs[i]
+      if (!org) return []
+      return (q.data?.data ?? []).map((d) => {
+        const proj = allProjects.find((p) => p.id === d.project_id)
+        return {
+          ...d,
+          projectName: proj?.name ?? '—',
+          orgId: org.id,
+        }
+      })
     })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-  const dbsLoading = dbQueries.some((q) => q.isLoading)
+  const dbsLoading = orgDbQueries.some((q) => q.isLoading)
   const isLoading = orgsLoading || projectsLoading || dbsLoading
 
   return (
@@ -118,7 +119,7 @@ export default function DatabasesPage() {
           </div>
           <div>
             <p className="text-sm font-semibold text-[--text-primary]">No databases yet</p>
-            <p className="text-xs text-[--text-muted] mt-1 max-w-xs">Provision a PostgreSQL or MySQL database and link it to one of your projects.</p>
+            <p className="text-xs text-[--text-muted] mt-1 max-w-xs">Provision a PostgreSQL, MySQL, or Redis database.</p>
           </div>
           <Button size="sm" onClick={() => setShowModal(true)}>Create Database</Button>
         </div>
@@ -169,11 +170,12 @@ export default function DatabasesPage() {
 
       {showModal && (
         <AddDatabaseModal
+          orgs={orgs}
           projects={allProjects}
           token={token}
           onClose={() => setShowModal(false)}
-          onCreated={(orgId, projectId) => {
-            qc.invalidateQueries({ queryKey: ['databases', orgId, projectId] })
+          onCreated={(orgId) => {
+            qc.invalidateQueries({ queryKey: ['databases-org', orgId] })
             setShowModal(false)
           }}
         />
@@ -182,32 +184,51 @@ export default function DatabasesPage() {
   )
 }
 
+const ENGINE_OPTIONS = [
+  { value: 'postgres', label: 'PostgreSQL' },
+  { value: 'mysql', label: 'MySQL' },
+  { value: 'redis', label: 'Redis' },
+  { value: 'mongodb', label: 'MongoDB' },
+]
+
 function AddDatabaseModal({
+  orgs,
   projects,
   token,
   onClose,
   onCreated,
 }: {
+  orgs: Organization[]
   projects: (Project & { orgId: string })[]
   token: string
   onClose: () => void
-  onCreated: (orgId: string, projectId: string) => void
+  onCreated: (orgId: string) => void
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
-  const [engine, setEngine] = useState<'postgres' | 'mysql'>('postgres')
+  const [orgId, setOrgId] = useState(orgs[0]?.id ?? '')
+  const [projectId, setProjectId] = useState('none')
+  const [engine, setEngine] = useState('postgres')
   const [name, setName] = useState('')
   const [error, setError] = useState('')
 
-  const selectedProject = projects.find((p) => p.id === projectId)
+  const orgProjects = projects.filter((p) => p.orgId === orgId)
+
+  const projectOptions = [
+    { value: 'none', label: 'No project (standalone)' },
+    ...orgProjects.map((p) => ({ value: p.id, label: p.name })),
+  ]
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () =>
-      api.post(
-        `/api/v1/orgs/${selectedProject!.orgId}/projects/${projectId}/databases`,
+    mutationFn: () => {
+      if (projectId === 'none') {
+        return api.post(`/api/v1/orgs/${orgId}/databases`, { name, engine, version: 'latest' }, token)
+      }
+      return api.post(
+        `/api/v1/orgs/${orgId}/projects/${projectId}/databases`,
         { name, engine, version: 'latest' },
         token
-      ),
-    onSuccess: () => onCreated(selectedProject!.orgId, projectId),
+      )
+    },
+    onSuccess: () => onCreated(orgId),
     onError: (e: Error) => setError(e.message),
   })
 
@@ -220,21 +241,27 @@ function AddDatabaseModal({
         </div>
 
         <div className="flex flex-col gap-3">
+          {orgs.length > 1 && (
+            <Select
+              label="Organization"
+              value={orgId}
+              onChange={(v) => { setOrgId(v); setProjectId('none') }}
+              options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+            />
+          )}
+
           <Select
             label="Project"
             value={projectId}
             onChange={(v) => setProjectId(v)}
-            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            options={projectOptions}
           />
 
           <Select
             label="Engine"
             value={engine}
-            onChange={(v) => setEngine(v as 'postgres' | 'mysql')}
-            options={[
-              { value: 'postgres', label: 'PostgreSQL' },
-              { value: 'mysql', label: 'MySQL' },
-            ]}
+            onChange={(v) => setEngine(v)}
+            options={ENGINE_OPTIONS}
           />
 
           <Input
@@ -249,7 +276,7 @@ function AddDatabaseModal({
 
         <div className="flex gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={() => mutate()} loading={isPending} disabled={!name || !projectId}>
+          <Button size="sm" onClick={() => mutate()} loading={isPending} disabled={!name || !orgId}>
             Create
           </Button>
         </div>

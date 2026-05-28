@@ -150,10 +150,11 @@ function Select({
         {open && (
           <div
             role="listbox"
+            style={{ background: '#1e1e1e' }}
             className={cn(
               'absolute z-50 mt-1 min-w-full max-h-60 overflow-y-auto',
-              'bg-[--bg-overlay] border border-[--border] rounded-[--radius-sm]',
-              'shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1',
+              'border border-[rgba(255,255,255,0.12)] rounded-[--radius-sm]',
+              'shadow-[0_12px_32px_rgba(0,0,0,0.7)] py-1',
             )}
           >
             {options.map((opt, idx) => {
@@ -173,7 +174,7 @@ function Select({
                   className={cn(
                     'flex items-center justify-between gap-2 px-3 py-2 text-sm cursor-pointer',
                     'transition-colors duration-75',
-                    isFocused ? 'bg-[--bg-raised]' : '',
+                    isFocused ? 'bg-[rgba(255,255,255,0.07)]' : '',
                     isSelected ? 'text-[--accent-light]' : 'text-[--text-primary]',
                   )}
                 >
