@@ -13,11 +13,11 @@ import { listProjects } from '@/lib/projects'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
 import { usePageTitle } from '@/lib/use-page-title'
-import type { DomainRecord, ListResponse, Project } from '@/lib/types'
+import type { DomainRecord, ListResponse, Organization, Project } from '@/lib/types'
 
-function listDomains(token: string, orgId: string, projectId: string) {
-  return api.get<ListResponse<DomainRecord>>(
-    `/api/v1/orgs/${orgId}/projects/${projectId}/domains`,
+function listDomainsByOrg(token: string, orgId: string) {
+  return api.get<{ data: DomainRecord[] }>(
+    `/api/v1/orgs/${orgId}/domains`,
     token
   )
 }
@@ -27,12 +27,6 @@ function domainStatusBadge(status: string): 'success' | 'warning' | 'error' | 'd
   if (status === 'pending') return 'warning'
   if (status === 'failed') return 'error'
   return 'default'
-}
-
-interface FlatDomain extends DomainRecord {
-  projectName: string
-  orgId: string
-  projectId: string
 }
 
 export default function DomainsPage() {
@@ -60,41 +54,37 @@ export default function DomainsPage() {
   const allProjects: (Project & { orgId: string })[] = projectQueries.flatMap((q, i) =>
     (q.data?.data ?? []).map((p) => ({ ...p, orgId: orgs[i]?.id ?? '' }))
   )
-  const projectsLoading = projectQueries.some((q) => q.isLoading)
 
   const domainQueries = useQueries({
-    queries: allProjects.map((project) => ({
-      queryKey: ['domains', project.orgId, project.id],
-      queryFn: () => listDomains(token, project.orgId, project.id),
-      enabled: allProjects.length > 0,
+    queries: orgs.map((org) => ({
+      queryKey: ['domains', org.id],
+      queryFn: () => listDomainsByOrg(token, org.id),
+      enabled: orgs.length > 0,
     })),
   })
 
-  const allDomains: FlatDomain[] = domainQueries
+  const projectMap = new Map(allProjects.map((p) => [p.id, p.name]))
+
+  const allDomains: (DomainRecord & { orgId: string })[] = domainQueries
     .flatMap((q, i) => {
-      const project = allProjects[i]
-      if (!project) return []
-      return (q.data?.data ?? []).map((d) => ({
-        ...d,
-        projectName: project.name,
-        orgId: project.orgId,
-        projectId: project.id,
-      }))
+      const org = orgs[i]
+      if (!org) return []
+      return (q.data?.data ?? []).map((d) => ({ ...d, orgId: org.id }))
     })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   const domainsLoading = domainQueries.some((q) => q.isLoading)
-  const isLoading = orgsLoading || projectsLoading || domainsLoading
+  const isLoading = orgsLoading || domainsLoading
 
-  async function handleVerify(domain: FlatDomain) {
-    setVerifying(domain.id)
+  async function handleVerify(d: DomainRecord & { orgId: string }) {
+    setVerifying(d.id)
     try {
       await api.post(
-        `/api/v1/orgs/${domain.orgId}/projects/${domain.projectId}/domains/${domain.id}/verify`,
+        `/api/v1/orgs/${d.orgId}/domains/${d.id}/verify`,
         {},
         token
       )
-      qc.invalidateQueries({ queryKey: ['domains', domain.orgId, domain.projectId] })
+      qc.invalidateQueries({ queryKey: ['domains', d.orgId] })
     } finally {
       setVerifying(null)
     }
@@ -126,7 +116,7 @@ export default function DomainsPage() {
           </div>
           <div>
             <p className="text-sm font-medium text-[--text-primary]">No domains yet</p>
-            <p className="text-xs text-[--text-muted] mt-1">Add a domain to get started.</p>
+            <p className="text-xs text-[--text-muted] mt-1">Add a custom domain to get started.</p>
           </div>
         </div>
       ) : (
@@ -134,7 +124,7 @@ export default function DomainsPage() {
           <div
             className="grid text-[11px] font-medium text-[--text-muted] uppercase tracking-wide px-4 py-2.5"
             style={{
-              gridTemplateColumns: '1.5fr 110px 100px 1fr 80px 80px',
+              gridTemplateColumns: '1.5fr 110px 110px 1fr 80px 80px',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
               background: 'rgba(255,255,255,0.02)',
             }}
@@ -151,7 +141,7 @@ export default function DomainsPage() {
               key={d.id}
               className="grid items-center px-4 py-3 text-sm"
               style={{
-                gridTemplateColumns: '1.5fr 110px 100px 1fr 80px 80px',
+                gridTemplateColumns: '1.5fr 110px 110px 1fr 80px 80px',
                 borderBottom: '1px solid rgba(255,255,255,0.03)',
               }}
             >
@@ -159,7 +149,9 @@ export default function DomainsPage() {
               <span>
                 <Badge variant={domainStatusBadge(d.status)}>{d.status}</Badge>
               </span>
-              <span className="text-xs text-[--text-muted] truncate">{d.projectName}</span>
+              <span className="text-xs text-[--text-muted] truncate">
+                {d.project_id ? (projectMap.get(d.project_id) ?? '—') : '—'}
+              </span>
               <span className="text-xs text-[--text-muted] font-mono truncate pr-4">{d.record_value || '—'}</span>
               <span className="text-xs text-[--text-muted]">{formatRelative(d.created_at)}</span>
               <span className="flex justify-end">
@@ -181,11 +173,12 @@ export default function DomainsPage() {
 
       {showModal && (
         <AddDomainModal
+          orgs={orgs}
           projects={allProjects}
           token={token}
           onClose={() => setShowModal(false)}
-          onCreated={(orgId, projectId) => {
-            qc.invalidateQueries({ queryKey: ['domains', orgId, projectId] })
+          onCreated={(orgId) => {
+            qc.invalidateQueries({ queryKey: ['domains', orgId] })
             setShowModal(false)
           }}
         />
@@ -195,31 +188,42 @@ export default function DomainsPage() {
 }
 
 function AddDomainModal({
+  orgs,
   projects,
   token,
   onClose,
   onCreated,
 }: {
+  orgs: Organization[]
   projects: (Project & { orgId: string })[]
   token: string
   onClose: () => void
-  onCreated: (orgId: string, projectId: string) => void
+  onCreated: (orgId: string) => void
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const [orgId, setOrgId] = useState(orgs[0]?.id ?? '')
+  const [projectId, setProjectId] = useState('')
   const [domainName, setDomainName] = useState('')
   const [dnsProvider, setDnsProvider] = useState<'route53' | 'external'>('external')
   const [error, setError] = useState('')
 
-  const selectedProject = projects.find((p) => p.id === projectId)
+  const orgProjects = projects.filter((p) => p.orgId === orgId)
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () =>
-      api.post(
-        `/api/v1/orgs/${selectedProject!.orgId}/projects/${projectId}/domains`,
+    mutationFn: () => {
+      if (projectId) {
+        return api.post(
+          `/api/v1/orgs/${orgId}/projects/${projectId}/domains`,
+          { domain_name: domainName, dns_provider: dnsProvider },
+          token
+        )
+      }
+      return api.post(
+        `/api/v1/orgs/${orgId}/domains`,
         { domain_name: domainName, dns_provider: dnsProvider },
         token
-      ),
-    onSuccess: () => onCreated(selectedProject!.orgId, projectId),
+      )
+    },
+    onSuccess: () => onCreated(orgId),
     onError: (e: Error) => setError(e.message),
   })
 
@@ -232,11 +236,23 @@ function AddDomainModal({
         </div>
 
         <div className="flex flex-col gap-3">
+          {orgs.length > 1 && (
+            <Select
+              label="Organization"
+              value={orgId}
+              onChange={(v) => { setOrgId(v); setProjectId('') }}
+              options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+            />
+          )}
+
           <Select
-            label="Project"
+            label="Project (optional)"
             value={projectId}
             onChange={(v) => setProjectId(v)}
-            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            options={[
+              { value: '', label: 'No project (org-level)' },
+              ...orgProjects.map((p) => ({ value: p.id, label: p.name })),
+            ]}
           />
 
           <Input
@@ -261,7 +277,7 @@ function AddDomainModal({
 
         <div className="flex gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={() => mutate()} loading={isPending} disabled={!domainName || !projectId}>
+          <Button size="sm" onClick={() => mutate()} loading={isPending} disabled={!domainName}>
             Add
           </Button>
         </div>

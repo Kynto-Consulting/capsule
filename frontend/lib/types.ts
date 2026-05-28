@@ -100,7 +100,8 @@ export interface Database {
 
 export interface DomainRecord {
   id: string
-  project_id: string
+  org_id: string
+  project_id?: string
   domain_name: string
   record_type: string
   record_value: string
