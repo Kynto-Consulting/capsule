@@ -21,6 +21,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-348973061281}
       - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-348973061281}
+      - CAPSULE_PUBLIC_HOST=${CAPSULE_PUBLIC_HOST:-api.tumi-ai.com}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds
