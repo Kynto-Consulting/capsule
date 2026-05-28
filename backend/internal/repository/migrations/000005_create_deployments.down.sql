@@ -1,4 +1,0 @@
-BEGIN;
-DROP TABLE IF EXISTS build_logs;
-DROP TABLE IF EXISTS deployments;
-COMMIT;

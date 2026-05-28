@@ -1,5 +1,0 @@
-BEGIN;
-DROP TABLE IF EXISTS api_tokens;
-DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS backup_history;
-COMMIT;

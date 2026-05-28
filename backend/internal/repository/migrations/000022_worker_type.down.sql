@@ -1,4 +1,0 @@
-BEGIN;
-ALTER TABLE workers DROP COLUMN IF EXISTS queue_url;
-ALTER TABLE workers DROP COLUMN IF EXISTS worker_type;
-COMMIT;

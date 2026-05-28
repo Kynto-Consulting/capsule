@@ -1,0 +1,9 @@
+[submodule "backend"]
+	path = backend
+	url = https://github.com/Kynto-Consulting/capsule-backend.git
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/Kynto-Consulting/capsule-frontend.git
+[submodule "cli"]
+	path = cli
+	url = https://github.com/Kynto-Consulting/capsule-cli.git
