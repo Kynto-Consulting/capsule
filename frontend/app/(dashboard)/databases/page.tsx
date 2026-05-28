@@ -52,6 +52,7 @@ export default function DatabasesPage() {
   const token = accessToken!
   const qc = useQueryClient()
   const [showModal, setShowModal] = useState(false)
+  const [selectedDb, setSelectedDb] = useState<FlatDatabase | null>(null)
 
   const { data: orgsRes, isLoading: orgsLoading } = useQuery({
     queryKey: ['orgs'],
@@ -149,7 +150,8 @@ export default function DatabasesPage() {
           {allDatabases.map((d) => (
             <div
               key={d.id}
-              className="grid items-center px-4 py-3 text-sm"
+              onClick={() => setSelectedDb(d)}
+              className="grid items-center px-4 py-3 text-sm cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
               style={{
                 gridTemplateColumns: '1fr 100px 110px 120px 90px',
                 borderBottom: '1px solid rgba(255,255,255,0.03)',
@@ -186,6 +188,10 @@ export default function DatabasesPage() {
             setShowModal(false)
           }}
         />
+      )}
+
+      {selectedDb && (
+        <DatabasePanel db={selectedDb} onClose={() => setSelectedDb(null)} />
       )}
     </div>
   )
@@ -295,4 +301,298 @@ function AddDatabaseModal({
       </div>
     </div>
   )
+}
+
+// ─── Engine client metadata ───────────────────────────────────────────────────
+
+interface EngineClient {
+  label: string
+  port: number
+  install: string
+  snippets: { lang: string; code: (host: string, port: number, name: string) => string }[]
+}
+
+const ENGINE_CLIENTS: Record<string, EngineClient> = {
+  postgres: {
+    label: 'PostgreSQL',
+    port: 5432,
+    install: 'npm i pg   # or: pip install psycopg2   # or: go get github.com/jackc/pgx/v5',
+    snippets: [
+      { lang: 'Node.js', code: (h, p, n) => `const { Pool } = require('pg')
+const pool = new Pool({ host: '${h}', port: ${p}, database: '${n}', user: 'capsuleadmin', password: 'YOUR_PASSWORD', ssl: false })
+const { rows } = await pool.query('SELECT NOW()')` },
+      { lang: 'Python', code: (h, p, n) => `import psycopg2
+conn = psycopg2.connect(host="${h}", port=${p}, dbname="${n}", user="capsuleadmin", password="YOUR_PASSWORD")
+cur = conn.cursor(); cur.execute("SELECT NOW()"); print(cur.fetchone())` },
+      { lang: 'Go', code: (h, p, n) => `import "github.com/jackc/pgx/v5"
+conn, _ := pgx.Connect(ctx, "postgres://capsuleadmin:YOUR_PASSWORD@${h}:${p}/${n}")
+defer conn.Close(ctx)` },
+    ],
+  },
+  mysql: {
+    label: 'MySQL',
+    port: 3306,
+    install: 'npm i mysql2   # or: pip install mysql-connector-python   # or: go get github.com/go-sql-driver/mysql',
+    snippets: [
+      { lang: 'Node.js', code: (h, p, n) => `const mysql = require('mysql2/promise')
+const conn = await mysql.createConnection({ host: '${h}', port: ${p}, database: '${n}', user: 'capsuleadmin', password: 'YOUR_PASSWORD' })
+const [rows] = await conn.query('SELECT NOW()')` },
+      { lang: 'Python', code: (h, p, n) => `import mysql.connector
+conn = mysql.connector.connect(host="${h}", port=${p}, database="${n}", user="capsuleadmin", password="YOUR_PASSWORD")
+cursor = conn.cursor(); cursor.execute("SELECT NOW()"); print(cursor.fetchone())` },
+      { lang: 'Go', code: (h, p, n) => `import _ "github.com/go-sql-driver/mysql"
+db, _ := sql.Open("mysql", "capsuleadmin:YOUR_PASSWORD@tcp(${h}:${p})/${n}")
+defer db.Close()` },
+    ],
+  },
+  mariadb: {
+    label: 'MariaDB',
+    port: 3306,
+    install: 'npm i mariadb   # or: pip install mariadb   # or: go get github.com/go-sql-driver/mysql',
+    snippets: [
+      { lang: 'Node.js', code: (h, p, n) => `const mariadb = require('mariadb')
+const pool = mariadb.createPool({ host: '${h}', port: ${p}, database: '${n}', user: 'capsuleadmin', password: 'YOUR_PASSWORD' })
+const conn = await pool.getConnection()` },
+      { lang: 'Python', code: (h, p, n) => `import mariadb
+conn = mariadb.connect(host="${h}", port=${p}, database="${n}", user="capsuleadmin", password="YOUR_PASSWORD")
+cur = conn.cursor(); cur.execute("SELECT VERSION()"); print(cur.fetchone())` },
+      { lang: 'Go', code: (h, p, n) => `// MariaDB uses the MySQL driver
+import _ "github.com/go-sql-driver/mysql"
+db, _ := sql.Open("mysql", "capsuleadmin:YOUR_PASSWORD@tcp(${h}:${p})/${n}")` },
+    ],
+  },
+  redis: {
+    label: 'Redis',
+    port: 6379,
+    install: 'npm i ioredis   # or: pip install redis   # or: go get github.com/redis/go-redis/v9',
+    snippets: [
+      { lang: 'Node.js', code: (h, p) => `const Redis = require('ioredis')
+const redis = new Redis({ host: '${h}', port: ${p}, password: 'YOUR_PASSWORD' })
+await redis.set('key', 'value'); const val = await redis.get('key')` },
+      { lang: 'Python', code: (h, p) => `import redis
+r = redis.Redis(host="${h}", port=${p}, password="YOUR_PASSWORD", decode_responses=True)
+r.set("key", "value"); print(r.get("key"))` },
+      { lang: 'Go', code: (h, p) => `import "github.com/redis/go-redis/v9"
+rdb := redis.NewClient(&redis.Options{ Addr: "${h}:${p}", Password: "YOUR_PASSWORD" })
+err := rdb.Set(ctx, "key", "value", 0).Err()` },
+    ],
+  },
+  mongodb: {
+    label: 'MongoDB',
+    port: 27017,
+    install: 'npm i mongodb   # or: pip install pymongo   # or: go get go.mongodb.org/mongo-driver/mongo',
+    snippets: [
+      { lang: 'Node.js', code: (h, p, n) => `const { MongoClient } = require('mongodb')
+const client = new MongoClient(\`mongodb://capsuleadmin:YOUR_PASSWORD@${h}:${p}/${n}\`)
+await client.connect(); const db = client.db('${n}')` },
+      { lang: 'Python', code: (h, p, n) => `from pymongo import MongoClient
+client = MongoClient(host="${h}", port=${p}, username="capsuleadmin", password="YOUR_PASSWORD")
+db = client["${n}"]` },
+      { lang: 'Go', code: (h, p, n) => `import "go.mongodb.org/mongo-driver/mongo"
+client, _ := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://capsuleadmin:YOUR_PASSWORD@${h}:${p}/${n}"))
+collection := client.Database("${n}").Collection("items")` },
+    ],
+  },
+  cassandra: {
+    label: 'Cassandra',
+    port: 9042,
+    install: 'npm i cassandra-driver   # or: pip install cassandra-driver   # or: go get github.com/gocql/gocql',
+    snippets: [
+      { lang: 'Node.js', code: (h, p) => `const cassandra = require('cassandra-driver')
+const client = new cassandra.Client({ contactPoints: ['${h}'], localDataCenter: 'datacenter1', protocolOptions: { port: ${p} } })
+await client.connect()` },
+      { lang: 'Python', code: (h, p) => `from cassandra.cluster import Cluster
+cluster = Cluster(['${h}'], port=${p})
+session = cluster.connect()
+session.execute("SELECT now() FROM system.local")` },
+      { lang: 'Go', code: (h, p) => `import "github.com/gocql/gocql"
+cluster := gocql.NewCluster("${h}"); cluster.Port = ${p}
+session, _ := cluster.CreateSession(); defer session.Close()` },
+    ],
+  },
+  clickhouse: {
+    label: 'ClickHouse',
+    port: 8123,
+    install: 'npm i @clickhouse/client   # or: pip install clickhouse-connect   # or: go get github.com/ClickHouse/clickhouse-go/v2',
+    snippets: [
+      { lang: 'Node.js', code: (h, p, n) => `const { createClient } = require('@clickhouse/client')
+const client = createClient({ host: 'http://${h}:${p}', database: '${n}', username: 'capsuleadmin', password: 'YOUR_PASSWORD' })
+const result = await client.query({ query: 'SELECT now()', format: 'JSONEachRow' })` },
+      { lang: 'Python', code: (h, p, n) => `import clickhouse_connect
+client = clickhouse_connect.get_client(host="${h}", port=${p}, database="${n}", username="capsuleadmin", password="YOUR_PASSWORD")
+result = client.query("SELECT now()")` },
+      { lang: 'Go', code: (h, p, n) => `import "github.com/ClickHouse/clickhouse-go/v2"
+conn, _ := clickhouse.Open(&clickhouse.Options{ Addr: []string{"${h}:${p}"}, Auth: clickhouse.Auth{ Database: "${n}", Username: "capsuleadmin", Password: "YOUR_PASSWORD" } })` },
+    ],
+  },
+  elasticsearch: {
+    label: 'Elasticsearch',
+    port: 9200,
+    install: 'npm i @elastic/elasticsearch   # or: pip install elasticsearch   # or: go get github.com/elastic/go-elasticsearch/v8',
+    snippets: [
+      { lang: 'Node.js', code: (h, p) => `const { Client } = require('@elastic/elasticsearch')
+const client = new Client({ node: 'http://${h}:${p}', auth: { username: 'capsuleadmin', password: 'YOUR_PASSWORD' } })
+const info = await client.info()` },
+      { lang: 'Python', code: (h, p) => `from elasticsearch import Elasticsearch
+es = Elasticsearch("http://${h}:${p}", basic_auth=("capsuleadmin", "YOUR_PASSWORD"))
+print(es.info())` },
+      { lang: 'Go', code: (h, p) => `import elasticsearch "github.com/elastic/go-elasticsearch/v8"
+es, _ := elasticsearch.NewClient(elasticsearch.Config{ Addresses: []string{"http://${h}:${p}"}, Username: "capsuleadmin", Password: "YOUR_PASSWORD" })
+res, _ := es.Info()` },
+    ],
+  },
+  cockroachdb: {
+    label: 'CockroachDB',
+    port: 26257,
+    install: 'npm i pg   # or: pip install psycopg2   # or: go get github.com/jackc/pgx/v5',
+    snippets: [
+      { lang: 'Node.js', code: (h, p, n) => `// CockroachDB is PostgreSQL-compatible
+const { Pool } = require('pg')
+const pool = new Pool({ connectionString: 'postgresql://capsuleadmin:YOUR_PASSWORD@${h}:${p}/${n}?sslmode=disable' })` },
+      { lang: 'Python', code: (h, p, n) => `# CockroachDB is PostgreSQL-compatible
+import psycopg2
+conn = psycopg2.connect("postgresql://capsuleadmin:YOUR_PASSWORD@${h}:${p}/${n}?sslmode=disable")` },
+      { lang: 'Go', code: (h, p, n) => `// CockroachDB is PostgreSQL-compatible
+import "github.com/jackc/pgx/v5"
+conn, _ := pgx.Connect(ctx, "postgresql://capsuleadmin:YOUR_PASSWORD@${h}:${p}/${n}?sslmode=disable")` },
+    ],
+  },
+}
+
+// ─── Database detail panel ────────────────────────────────────────────────────
+
+function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void }) {
+  const [activeLang, setActiveLang] = useState(0)
+  const [copied, setCopied] = useState<string | null>(null)
+  const client = ENGINE_CLIENTS[db.engine]
+  const host = db.host || `capsule-${db.engine}.internal`
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key)
+      setTimeout(() => setCopied(null), 1800)
+    })
+  }
+
+  const connUrl = db.host
+    ? buildClientUrl(db.engine, host, db.port, db.name)
+    : `${db.engine}://${host}:${db.port}/${db.name}`
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div
+        className="w-full max-w-xl h-full bg-[--bg-surface] border-l border-[--border] shadow-[--shadow] overflow-y-auto flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[--border] flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <span className={`w-2.5 h-2.5 rounded-full ${engineColor(db.engine)}`} />
+            <div>
+              <h2 className="text-sm font-semibold text-[--text-primary] font-mono">{db.name}</h2>
+              <p className="text-[11px] text-[--text-muted] capitalize">{client?.label ?? db.engine} · {db.status}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-[--text-muted] hover:text-[--text-secondary] transition-colors text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="flex flex-col gap-5 p-6">
+          {/* Connection URL */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[--text-muted] mb-1.5">Connection URL</p>
+            <div className="flex items-center gap-2 bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2">
+              <code className="text-xs text-[--accent-light] font-mono flex-1 truncate">{connUrl}</code>
+              <button
+                onClick={() => copy(connUrl, 'url')}
+                className="text-[10px] text-[--text-muted] hover:text-[--text-secondary] transition-colors flex-shrink-0 px-1.5 py-0.5 border border-[--border] rounded"
+              >
+                {copied === 'url' ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          {/* Metadata */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Host', value: host },
+              { label: 'Port', value: String(db.port || client?.port || '—') },
+              { label: 'Version', value: db.version || '—' },
+              { label: 'Engine', value: client?.label ?? db.engine },
+              { label: 'Status', value: db.status },
+              { label: 'Project', value: db.projectName },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2">
+                <p className="text-[10px] text-[--text-muted] uppercase tracking-wider">{label}</p>
+                <p className="text-xs text-[--text-primary] font-mono mt-0.5 truncate">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Install */}
+          {client && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[--text-muted] mb-1.5">Install client</p>
+              <div className="flex items-center gap-2 bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2">
+                <code className="text-xs text-[--text-secondary] font-mono flex-1">{client.install}</code>
+                <button
+                  onClick={() => copy(client.install, 'install')}
+                  className="text-[10px] text-[--text-muted] hover:text-[--text-secondary] transition-colors flex-shrink-0 px-1.5 py-0.5 border border-[--border] rounded"
+                >
+                  {copied === 'install' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Code snippets */}
+          {client && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[--text-muted] mb-2">Connect</p>
+              <div className="flex gap-1 mb-2">
+                {client.snippets.map((s, i) => (
+                  <button
+                    key={s.lang}
+                    onClick={() => setActiveLang(i)}
+                    className={`text-[11px] px-2.5 py-1 rounded-[--radius-sm] border transition-colors ${
+                      activeLang === i
+                        ? 'border-[--border-strong] bg-[--bg-raised] text-[--text-primary]'
+                        : 'border-[--border] bg-transparent text-[--text-muted] hover:text-[--text-secondary]'
+                    }`}
+                  >
+                    {s.lang}
+                  </button>
+                ))}
+              </div>
+              <div className="relative">
+                <pre className="bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-4 py-3 text-xs text-[--text-secondary] font-mono overflow-x-auto whitespace-pre leading-relaxed">
+                  {client.snippets[activeLang].code(host, db.port || client.port, db.name)}
+                </pre>
+                <button
+                  onClick={() => copy(client.snippets[activeLang].code(host, db.port || client.port, db.name), 'snippet')}
+                  className="absolute top-2 right-2 text-[10px] text-[--text-muted] hover:text-[--text-secondary] transition-colors px-1.5 py-0.5 border border-[--border] rounded bg-[--bg-raised]"
+                >
+                  {copied === 'snippet' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function buildClientUrl(engine: string, host: string, port: number, name: string): string {
+  switch (engine) {
+    case 'postgres':      return `postgresql://capsuleadmin:***@${host}:${port}/${name}`
+    case 'mysql':
+    case 'mariadb':       return `mysql://capsuleadmin:***@${host}:${port}/${name}`
+    case 'redis':         return `redis://:***@${host}:${port}`
+    case 'mongodb':       return `mongodb://capsuleadmin:***@${host}:${port}/${name}`
+    case 'cassandra':     return `cassandra://${host}:${port}`
+    case 'clickhouse':    return `http://capsuleadmin:***@${host}:${port}/${name}`
+    case 'elasticsearch': return `http://capsuleadmin:***@${host}:${port}`
+    case 'cockroachdb':   return `postgresql://capsuleadmin:***@${host}:${port}/${name}?sslmode=disable`
+    default:              return `${engine}://${host}:${port}/${name}`
+  }
 }
