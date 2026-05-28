@@ -27,11 +27,18 @@ function dbStatusBadge(status: string): 'success' | 'warning' | 'error' | 'defau
 }
 
 function engineColor(engine: string): string {
-  if (engine === 'postgres') return 'bg-blue-500'
-  if (engine === 'mysql') return 'bg-orange-400'
-  if (engine === 'redis') return 'bg-red-500'
-  if (engine === 'mongodb') return 'bg-green-500'
-  return 'bg-[--text-muted]'
+  switch (engine) {
+    case 'postgres':      return 'bg-blue-500'
+    case 'mysql':         return 'bg-orange-400'
+    case 'mariadb':       return 'bg-amber-500'
+    case 'redis':         return 'bg-red-500'
+    case 'mongodb':       return 'bg-green-500'
+    case 'cassandra':     return 'bg-sky-400'
+    case 'clickhouse':    return 'bg-yellow-400'
+    case 'elasticsearch': return 'bg-teal-400'
+    case 'cockroachdb':   return 'bg-purple-500'
+    default:              return 'bg-[--text-muted]'
+  }
 }
 
 interface FlatDatabase extends Database {
@@ -185,10 +192,15 @@ export default function DatabasesPage() {
 }
 
 const ENGINE_OPTIONS = [
-  { value: 'postgres', label: 'PostgreSQL' },
-  { value: 'mysql', label: 'MySQL' },
-  { value: 'redis', label: 'Redis' },
-  { value: 'mongodb', label: 'MongoDB' },
+  { value: 'postgres',      label: 'PostgreSQL' },
+  { value: 'mysql',         label: 'MySQL' },
+  { value: 'mariadb',       label: 'MariaDB' },
+  { value: 'redis',         label: 'Redis' },
+  { value: 'mongodb',       label: 'MongoDB' },
+  { value: 'cassandra',     label: 'Cassandra' },
+  { value: 'clickhouse',    label: 'ClickHouse' },
+  { value: 'elasticsearch', label: 'Elasticsearch' },
+  { value: 'cockroachdb',   label: 'CockroachDB' },
 ]
 
 function AddDatabaseModal({
