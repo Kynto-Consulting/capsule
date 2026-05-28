@@ -234,6 +234,7 @@ function AddDatabaseModal({
   const [projectId, setProjectId] = useState('none')
   const [engine, setEngine] = useState('postgres')
   const [name, setName] = useState('')
+  const [tier, setTier] = useState<'dev' | 'prod'>('dev')
   const [error, setError] = useState('')
 
   const orgProjects = projects.filter((p) => p.orgId === orgId)
@@ -246,11 +247,11 @@ function AddDatabaseModal({
   const { mutate, isPending } = useMutation({
     mutationFn: () => {
       if (projectId === 'none') {
-        return api.post(`/api/v1/orgs/${orgId}/databases`, { name, engine, version: 'latest' }, token)
+        return api.post(`/api/v1/orgs/${orgId}/databases`, { name, engine, version: 'latest', tier }, token)
       }
       return api.post(
         `/api/v1/orgs/${orgId}/projects/${projectId}/databases`,
-        { name, engine, version: 'latest' },
+        { name, engine, version: 'latest', tier },
         token
       )
     },
@@ -296,6 +297,47 @@ function AddDatabaseModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+
+          {/* Tier selector */}
+          <div>
+            <p className="text-[11px] font-medium text-[--text-muted] mb-1.5">Tier</p>
+            <div className="flex flex-col gap-2">
+              {([
+                {
+                  value: 'dev' as const,
+                  label: 'Dev',
+                  description: 'Docker container on your server — instant, ~free',
+                },
+                {
+                  value: 'prod' as const,
+                  label: 'Prod',
+                  description: 'AWS Aurora Serverless v2 — HA, auto-scaling, backups',
+                },
+              ] as const).map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-3 px-3 py-2.5 rounded-[--radius] border cursor-pointer transition-colors ${
+                    tier === opt.value
+                      ? 'border-[--accent] bg-[rgba(124,58,237,0.08)]'
+                      : 'border-[--border] hover:border-[--border-strong] bg-[--bg-raised]'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="tier"
+                    value={opt.value}
+                    checked={tier === opt.value}
+                    onChange={() => setTier(opt.value)}
+                    className="mt-0.5 accent-[--accent] flex-shrink-0"
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-[--text-primary]">{opt.label}</p>
+                    <p className="text-[11px] text-[--text-muted] mt-0.5">{opt.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
 
         {error && <p className="text-xs text-[--danger]">{error}</p>}
@@ -469,18 +511,49 @@ conn, _ := pgx.Connect(ctx, "postgresql://capsuleadmin:YOUR_PASSWORD@${h}:${p}/$
 
 // ─── Database detail panel ────────────────────────────────────────────────────
 
+type PanelTab = 'connect' | 'query'
+
 function DatabasePanel({ db, token, onClose, onDeleted }: {
   db: FlatDatabase
   token: string
   onClose: () => void
   onDeleted: () => void
 }) {
+  const [activeTab, setActiveTab] = useState<PanelTab>('connect')
   const [activeLang, setActiveLang] = useState(0)
   const [copied, setCopied] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // SQL Explorer state
+  const [sql, setSql] = useState('')
+  const [queryResult, setQueryResult] = useState<{ columns: string[]; rows: unknown[][]; row_count: number } | null>(null)
+  const [queryError, setQueryError] = useState<string | null>(null)
+  const [queryRunning, setQueryRunning] = useState(false)
+
   const client = ENGINE_CLIENTS[db.engine]
   const host = db.host || ''
   const port = db.port || client?.port || 0
+
+  const sqlSupported = db.engine === 'postgres' || db.engine === 'mysql'
+
+  async function runQuery() {
+    if (!sql.trim()) return
+    setQueryRunning(true)
+    setQueryResult(null)
+    setQueryError(null)
+    try {
+      const result = await api.post<{ columns: string[]; rows: unknown[][]; row_count: number }>(
+        `/api/v1/orgs/${db.orgId}/databases/${db.id}/query`,
+        { sql },
+        token
+      )
+      setQueryResult(result)
+    } catch (e) {
+      setQueryError(e instanceof Error ? e.message : 'Query failed')
+    } finally {
+      setQueryRunning(false)
+    }
+  }
 
   async function handleDelete() {
     if (!confirm(`Delete database "${db.name}"? This cannot be undone.`)) return
@@ -512,23 +585,142 @@ function DatabasePanel({ db, token, onClose, onDeleted }: {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[--border] flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${engineColor(db.engine)}`} />
-            <div>
-              <h2 className="text-sm font-semibold text-[--text-primary] font-mono">{db.name}</h2>
-              <p className="text-[11px] text-[--text-muted] capitalize">{client?.label ?? db.engine} · {db.status}</p>
+        <div className="flex-shrink-0 border-b border-[--border]">
+          <div className="flex items-center justify-between px-6 pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <span className={`w-2.5 h-2.5 rounded-full ${engineColor(db.engine)}`} />
+              <div>
+                <h2 className="text-sm font-semibold text-[--text-primary] font-mono">{db.name}</h2>
+                <p className="text-[11px] text-[--text-muted] capitalize">{client?.label ?? db.engine} · {db.status}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" loading={deleting} onClick={handleDelete}
+                className="text-[--danger] border-[--danger]/30 hover:bg-[--danger]/10">
+                Delete
+              </Button>
+              <button onClick={onClose} className="text-[--text-muted] hover:text-[--text-secondary] transition-colors text-xl leading-none ml-1">&times;</button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" loading={deleting} onClick={handleDelete}
-              className="text-[--danger] border-[--danger]/30 hover:bg-[--danger]/10">
-              Delete
-            </Button>
-            <button onClick={onClose} className="text-[--text-muted] hover:text-[--text-secondary] transition-colors text-xl leading-none ml-1">&times;</button>
+          {/* Tabs */}
+          <div className="flex gap-1 px-6 pb-0">
+            {([
+              { id: 'connect' as PanelTab, label: 'Connect' },
+              { id: 'query' as PanelTab, label: 'Query' },
+            ]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`text-xs px-3 py-2 border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-[--accent] text-[--text-primary]'
+                    : 'border-transparent text-[--text-muted] hover:text-[--text-secondary]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
+        {/* Query tab */}
+        {activeTab === 'query' && (
+          <div className="flex flex-col gap-4 p-6 flex-1">
+            {sqlSupported ? (
+              <>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[--text-muted]">SQL Query</p>
+                    <p className="text-[10px] text-[--text-muted] italic">Read-only queries only (SELECT)</p>
+                  </div>
+                  <textarea
+                    value={sql}
+                    onChange={(e) => setSql(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault()
+                        runQuery()
+                      }
+                    }}
+                    placeholder="SELECT * FROM users LIMIT 10;"
+                    rows={6}
+                    className="w-full bg-[#0a0a0a] border border-[--border] rounded-[--radius-sm] px-3 py-2.5 text-xs font-mono text-[--text-secondary] placeholder-[--text-muted] focus:outline-none focus:border-[--accent] resize-y leading-relaxed"
+                    style={{ minHeight: '120px' }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={runQuery}
+                    loading={queryRunning}
+                    disabled={!sql.trim() || queryRunning}
+                  >
+                    Run
+                  </Button>
+                  {queryResult && (
+                    <span className="text-[11px] text-[--text-muted]">
+                      {queryResult.row_count} row{queryResult.row_count !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+
+                {queryError && (
+                  <div className="bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] rounded-[--radius-sm] px-3 py-2.5">
+                    <p className="text-xs text-red-400 font-mono">{queryError}</p>
+                  </div>
+                )}
+
+                {queryResult && queryResult.columns.length > 0 && (
+                  <div className="overflow-auto rounded-[--radius-sm] border border-[--border] flex-1" style={{ maxHeight: '360px' }}>
+                    <table className="w-full text-xs font-mono border-collapse min-w-max">
+                      <thead>
+                        <tr className="sticky top-0" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                          {queryResult.columns.map((col) => (
+                            <th
+                              key={col}
+                              className="text-left px-3 py-2 text-[--text-muted] font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap"
+                              style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                            >
+                              {col}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {queryResult.rows.map((row, ri) => (
+                          <tr
+                            key={ri}
+                            className="hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                          >
+                            {row.map((cell, ci) => (
+                              <td key={ci} className="px-3 py-2 text-[--text-secondary] whitespace-nowrap max-w-[200px] truncate">
+                                {cell === null ? <span className="text-[--text-muted] italic">NULL</span> : String(cell)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {queryResult && queryResult.columns.length === 0 && (
+                  <div className="bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2.5">
+                    <p className="text-xs text-[--text-muted]">Query executed successfully. No rows returned.</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
+                <p className="text-sm text-[--text-secondary]">SQL Explorer is not available for this engine.</p>
+                <p className="text-xs text-[--text-muted]">Supported engines: PostgreSQL, MySQL</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'connect' && (
         <div className="flex flex-col gap-5 p-6">
           {/* Connection URL */}
           <div>
@@ -618,6 +810,7 @@ function DatabasePanel({ db, token, onClose, onDeleted }: {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )
