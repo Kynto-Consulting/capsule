@@ -465,7 +465,8 @@ function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void 
   const [activeLang, setActiveLang] = useState(0)
   const [copied, setCopied] = useState<string | null>(null)
   const client = ENGINE_CLIENTS[db.engine]
-  const host = db.host || `capsule-${db.engine}.internal`
+  const host = db.host || ''
+  const port = db.port || client?.port || 0
 
   function copy(text: string, key: string) {
     navigator.clipboard.writeText(text).then(() => {
@@ -474,9 +475,9 @@ function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void 
     })
   }
 
-  const connUrl = db.host
-    ? buildClientUrl(db.engine, host, db.port, db.name)
-    : `${db.engine}://${host}:${db.port}/${db.name}`
+  // Use backend-provided URL when available (includes real password); fall back to masked URL
+  const connUrl: string = (db as FlatDatabase & { connection_url?: string }).connection_url
+    || (host && port ? buildClientUrl(db.engine, host, port, db.name) : '')
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
@@ -500,22 +501,30 @@ function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void 
           {/* Connection URL */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-[--text-muted] mb-1.5">Connection URL</p>
-            <div className="flex items-center gap-2 bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2">
-              <code className="text-xs text-[--accent-light] font-mono flex-1 truncate">{connUrl}</code>
-              <button
-                onClick={() => copy(connUrl, 'url')}
-                className="text-[10px] text-[--text-muted] hover:text-[--text-secondary] transition-colors flex-shrink-0 px-1.5 py-0.5 border border-[--border] rounded"
-              >
-                {copied === 'url' ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
+            {connUrl ? (
+              <div className="flex items-center gap-2 bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2">
+                <code className="text-xs text-[--accent-light] font-mono flex-1 truncate">{connUrl}</code>
+                <button
+                  onClick={() => copy(connUrl, 'url')}
+                  className="text-[10px] text-[--text-muted] hover:text-[--text-secondary] transition-colors flex-shrink-0 px-1.5 py-0.5 border border-[--border] rounded"
+                >
+                  {copied === 'url' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-3 py-2">
+                <span className="text-xs text-[--text-muted] font-mono">
+                  {db.status === 'provisioning' ? 'Provisioning…' : 'Unavailable'}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Metadata */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Host', value: host },
-              { label: 'Port', value: String(db.port || client?.port || '—') },
+              { label: 'Host', value: host || (db.status === 'provisioning' ? '…' : '—') },
+              { label: 'Port', value: port ? String(port) : (db.status === 'provisioning' ? '…' : '—') },
               { label: 'Version', value: db.version || '—' },
               { label: 'Engine', value: client?.label ?? db.engine },
               { label: 'Status', value: db.status },
@@ -565,10 +574,10 @@ function DatabasePanel({ db, onClose }: { db: FlatDatabase; onClose: () => void 
               </div>
               <div className="relative">
                 <pre className="bg-[--bg-raised] border border-[--border] rounded-[--radius-sm] px-4 py-3 text-xs text-[--text-secondary] font-mono overflow-x-auto whitespace-pre leading-relaxed">
-                  {client.snippets[activeLang].code(host, db.port || client.port, db.name)}
+                  {client.snippets[activeLang].code(host || 'HOST', port || client.port, db.name)}
                 </pre>
                 <button
-                  onClick={() => copy(client.snippets[activeLang].code(host, db.port || client.port, db.name), 'snippet')}
+                  onClick={() => copy(client.snippets[activeLang].code(host || 'HOST', port || client.port, db.name), 'snippet')}
                   className="absolute top-2 right-2 text-[10px] text-[--text-muted] hover:text-[--text-secondary] transition-colors px-1.5 py-0.5 border border-[--border] rounded bg-[--bg-raised]"
                 >
                   {copied === 'snippet' ? 'Copied!' : 'Copy'}
