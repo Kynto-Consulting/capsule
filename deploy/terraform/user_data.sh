@@ -24,8 +24,8 @@ DEPLOY_DIR=/opt/capsule
 mkdir -p "$DEPLOY_DIR"
 cd "$DEPLOY_DIR"
 
-# Clone repo
-git clone https://github.com/Kynto-Consulting/capsule.git .
+# Clone repo (with submodules — backend, frontend, cli are submodules)
+git clone --recurse-submodules https://github.com/Kynto-Consulting/capsule.git .
 
 # Pull .env from S3 (instance role has S3 access)
 aws s3 cp s3://capsule-artifacts-348973061281/config/.env .env --region us-east-1

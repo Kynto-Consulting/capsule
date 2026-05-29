@@ -72,7 +72,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_logs" {
 
 resource "aws_security_group" "fargate_tasks" {
   name        = "${var.app_name}-fargate-tasks"
-  description = "Capsule Fargate app tasks — inbound from ALB only"
+  description = "Capsule Fargate app tasks - inbound from ALB only"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -123,10 +123,11 @@ resource "aws_lb_listener_certificate" "apps_wildcard" {
 }
 
 # ── IAM: allow Capsule API role to manage ECS + ELB ─────────────────────────
+# Using managed policy (not inline) to stay under the 2048-byte inline limit.
 
-resource "aws_iam_user_policy" "capsule_api_ecs" {
-  name = "capsule-api-ecs"
-  user = aws_iam_user.capsule_api.name
+resource "aws_iam_policy" "capsule_api_ecs" {
+  name        = "capsule-api-ecs"
+  description = "Allow capsule-api user to manage ECS services and ALB rules"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -175,6 +176,11 @@ resource "aws_iam_user_policy" "capsule_api_ecs" {
       },
     ]
   })
+}
+
+resource "aws_iam_user_policy_attachment" "capsule_api_ecs" {
+  user       = aws_iam_user.capsule_api.name
+  policy_arn = aws_iam_policy.capsule_api_ecs.arn
 }
 
 # ── Outputs ───────────────────────────────────────────────────────────────────

@@ -22,6 +22,17 @@ services:
       - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-348973061281}
       - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-348973061281}
       - CAPSULE_PUBLIC_HOST=${CAPSULE_PUBLIC_HOST:-api.tumi-ai.com}
+      # ECS Fargate deploy target
+      - ECS_CLUSTER=${ECS_CLUSTER:-}
+      - ECS_SUBNETS=${ECS_SUBNETS:-}
+      - ECS_SECURITY_GROUP=${ECS_SECURITY_GROUP:-}
+      - ECS_EXECUTION_ROLE_ARN=${ECS_EXECUTION_ROLE_ARN:-}
+      - ALB_LISTENER_ARN=${ALB_LISTENER_ARN:-}
+      - VPC_ID=${VPC_ID:-}
+      - APPS_DOMAIN=${APPS_DOMAIN:-}
+      - ECR_REGISTRY=${ECR_REGISTRY:-}
+      - ALB_DNS_NAME=${ALB_DNS_NAME:-}
+      - PUBLIC_HOST=${PUBLIC_HOST:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds

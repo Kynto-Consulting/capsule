@@ -91,50 +91,22 @@ resource "aws_iam_user_policy" "capsule_api" {
 }
 
 # ── Lambda execution role ──────────────────────────────────────────────────────
-resource "aws_iam_role" "capsule_lambda" {
-  name = "capsule-lambda-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-
-  tags = {
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Project     = "capsule"
-  }
-
-  lifecycle {
-    # Role may already exist (created manually), import with:
-    # terraform import aws_iam_role.capsule_lambda capsule-lambda-role
-    ignore_changes = [name]
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.capsule_lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
+# Role itself is defined in ec2.tf as aws_iam_role.lambda_execution (capsule-lambda-role).
+# We attach additional policies here.
 
 resource "aws_iam_role_policy_attachment" "lambda_ecr_read" {
-  role       = aws_iam_role.capsule_lambda.name
+  role       = aws_iam_role.lambda_execution.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
 resource "aws_iam_role_policy" "lambda_inline" {
   name = "capsule-lambda-inline"
-  role = aws_iam_role.capsule_lambda.name
+  role = aws_iam_role.lambda_execution.name
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        # Allow Lambda to write logs to CloudWatch
         Sid    = "CloudWatchLogs"
         Effect = "Allow"
         Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
