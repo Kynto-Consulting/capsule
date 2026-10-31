@@ -3,7 +3,7 @@ name: capsule-prod
 services:
   # ── Backend API Server ─────────────────────────────────────
   backend:
-    image: capsule-backend:latest
+    image: ${ECR_REGISTRY:-598806201852.dkr.ecr.us-east-1.amazonaws.com}/capsule/server:latest
     container_name: capsule-backend
     restart: always
     ports:
@@ -19,8 +19,8 @@ services:
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-348973061281}
-      - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-348973061281}
+      - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-598806201852}
+      - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-598806201852}
       - CAPSULE_PUBLIC_HOST=${CAPSULE_PUBLIC_HOST:-api.tumi-ai.com}
       # ECS Fargate deploy target
       - ECS_CLUSTER=${ECS_CLUSTER:-}
@@ -44,7 +44,7 @@ services:
 
   # ── Frontend Dashboard ─────────────────────────────────────
   frontend:
-    image: 348973061281.dkr.ecr.us-east-1.amazonaws.com/capsule/frontend:latest
+    image: 598806201852.dkr.ecr.us-east-1.amazonaws.com/capsule/frontend:latest
     container_name: capsule-frontend
     restart: always
     ports:

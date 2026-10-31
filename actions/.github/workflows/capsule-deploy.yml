@@ -1,0 +1,72 @@
+# Reusable workflow: checkout + Capsule deploy.
+#
+# NOTE: GitHub only resolves reusable workflows from `.github/workflows/` at the
+# ROOT of a repository. This file lives under actions/ in the Capsule monorepo; to
+# call it with `uses: owner/repo/.github/workflows/capsule-deploy.yml@ref`, copy it
+# to the root `.github/workflows/` of the repository that hosts it. Most projects
+# should use the composite action (actions/deploy) directly instead.
+name: Capsule deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      org-id:
+        type: string
+        required: true
+      project-id:
+        type: string
+        required: true
+      api-url:
+        type: string
+        required: true
+      env:
+        description: Deploy-only variables, one KEY=VALUE per line.
+        type: string
+        default: ''
+      working-directory:
+        type: string
+        default: '.'
+      timeout:
+        type: string
+        default: 10m
+      cli-version:
+        type: string
+        default: latest
+      environment:
+        description: Optional GitHub environment name (for approvals and scoped secrets).
+        type: string
+        default: ''
+    secrets:
+      CAPSULE_TOKEN:
+        required: true
+    outputs:
+      url:
+        description: Public URL of the deployed app.
+        value: ${{ jobs.deploy.outputs.url }}
+      deployment-id:
+        description: Capsule deployment ID.
+        value: ${{ jobs.deploy.outputs.deployment-id }}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || null }}
+    outputs:
+      url: ${{ steps.capsule.outputs.url }}
+      deployment-id: ${{ steps.capsule.outputs.deployment-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: capsule
+        uses: kynto-consulting/capsule/actions/deploy@main
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ inputs.org-id }}
+          project-id: ${{ inputs.project-id }}
+          api-url: ${{ inputs.api-url }}
+          env: ${{ inputs.env }}
+          working-directory: ${{ inputs.working-directory }}
+          timeout: ${{ inputs.timeout }}
+          version: ${{ inputs.cli-version }}

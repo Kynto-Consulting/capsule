@@ -2,13 +2,13 @@
 # Never commit terraform.tfvars — it may contain secrets.
 
 aws_region     = "us-east-1"
-aws_account_id = "348973061281"
+aws_account_id = "598806201852"
 environment    = "production"
 app_name       = "capsule"
 
 # Leave alb_domain empty to skip the HTTPS listener.
 # alb_domain          = "capsule.example.com"
-# alb_certificate_arn = "arn:aws:acm:us-east-1:348973061281:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# alb_certificate_arn = "arn:aws:acm:us-east-1:598806201852:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 db_instance_class = "db.t3.micro"
 ec2_instance_type = "t3.small"

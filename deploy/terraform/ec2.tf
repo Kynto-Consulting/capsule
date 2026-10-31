@@ -95,14 +95,14 @@ resource "aws_iam_role_policy" "builder_lambda" {
           "lambda:ListFunctions"
         ]
         Resource = [
-          "arn:aws:lambda:us-east-1:348973061281:*"
+          "arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:*"
         ]
       },
       {
         Sid    = "PassLambdaRole"
         Effect = "Allow"
         Action = "iam:PassRole"
-        Resource = "arn:aws:iam::348973061281:role/${var.app_name}-lambda-role"
+        Resource = "arn:aws:iam::${var.aws_account_id}:role/${var.app_name}-lambda-role"
       }
     ]
   })

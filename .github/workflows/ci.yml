@@ -191,3 +191,15 @@ jobs:
 
       - name: Smoke test
         run: ../bin/capsule version
+
+      - name: Build WASM binary (npm wrapper)
+        run: GOOS=js GOARCH=wasm go build -trimpath -o npm/capsule.wasm ./cmd/capsule
+
+      - name: Check npm wrapper syntax
+        run: node --check npm/bin/capsule.js
+
+      - name: Smoke test wrapper (ci init)
+        run: |
+          tmp=$(mktemp -d)
+          echo '{"scripts":{"test":"echo ok"}}' > "$tmp/package.json"
+          (cd "$tmp" && node "$GITHUB_WORKSPACE/cli/npm/bin/capsule.js" ci init --print | grep -q "uses: kynto-consulting/capsule/actions/deploy")
