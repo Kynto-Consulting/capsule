@@ -37,6 +37,13 @@ inputs:
     description: Version of @kyntocg/capsule-cli to install (npm version or tag).
     required: false
     default: latest
+  cli-package:
+    description: >-
+      Full npm install spec for the CLI, overriding `version` (a tarball URL, a path in the
+      workspace such as ./vendor/capsule-cli.tgz, or any spec npm accepts). Use it when the CLI
+      is not published to npm yet.
+    required: false
+    default: ''
   apps-domain:
     description: Apps domain used to build the public URL when the API does not return one.
     required: false
@@ -62,7 +69,13 @@ runs:
       shell: bash
       env:
         CAPSULE_CLI_VERSION: ${{ inputs.version }}
-      run: npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}"
+        CAPSULE_CLI_PACKAGE: ${{ inputs.cli-package }}
+      run: |
+        if [ -n "$CAPSULE_CLI_PACKAGE" ]; then
+          npm install --global "$CAPSULE_CLI_PACKAGE"
+        else
+          npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}"
+        fi
 
     - name: Deploy
       id: deploy

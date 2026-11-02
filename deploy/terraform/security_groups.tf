@@ -72,6 +72,12 @@ resource "aws_security_group" "app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Ingress also holds rules managed outside this resource (database port rules below and the ones
+  # the Capsule API creates per project). Without this, every apply would revoke them.
+  lifecycle {
+    ignore_changes = [ingress]
+  }
+
   tags = {
     Name        = "${var.app_name}-app"
     Environment = var.environment
@@ -144,4 +150,35 @@ resource "aws_security_group" "redis" {
     ManagedBy   = "terraform"
     Project     = "capsule"
   }
+}
+
+# Databases provisioned by Capsule run as containers on the app host. They are
+# published only inside the dedicated range [db_port_from, db_port_to] (the
+# backend picks ports there), never on docker's general ephemeral range where
+# app containers live. The range is reachable only from var.db_allowed_cidrs and
+# the host's own Elastic IP (the API queries databases through the public hostname).
+# Per-database access for users is managed by the API (see APP_SECURITY_GROUP_ID), not here.
+locals {
+  db_sources = concat(var.db_allowed_cidrs, ["${aws_eip.builder.public_ip}/32"])
+}
+
+resource "aws_security_group_rule" "app_db_ports" {
+  type              = "ingress"
+  description       = "Capsule databases (dedicated port range; host itself + optional static CIDRs)"
+  security_group_id = aws_security_group.app.id
+  protocol          = "tcp"
+  from_port         = var.db_port_from
+  to_port           = var.db_port_to
+  cidr_blocks       = local.db_sources
+}
+
+resource "aws_security_group_rule" "app_db_extra_ports" {
+  for_each          = toset([for p in var.db_extra_ports : tostring(p)])
+  type              = "ingress"
+  description       = "Capsule database published before the dedicated range (port ${each.value})"
+  security_group_id = aws_security_group.app.id
+  protocol          = "tcp"
+  from_port         = tonumber(each.value)
+  to_port           = tonumber(each.value)
+  cidr_blocks       = local.db_sources
 }

@@ -33,6 +33,13 @@ services:
       - ECR_REGISTRY=${ECR_REGISTRY:-}
       - ALB_DNS_NAME=${ALB_DNS_NAME:-}
       - PUBLIC_HOST=${PUBLIC_HOST:-}
+      # Databases provisioned by Capsule: public hostname (must resolve to the EC2 host, not the ALB),
+      # postgres TLS cert dir (host path) and the host port range they are published on
+      - CAPSULE_DB_HOST=${CAPSULE_DB_HOST:-}
+      - CAPSULE_DB_TLS_DIR=${CAPSULE_DB_TLS_DIR:-}
+      - CAPSULE_DB_PORT_RANGE=${CAPSULE_DB_PORT_RANGE:-}
+      # Security group of this host: Capsule adds/removes per-database ingress rules on it (empty = access API answers 501)
+      - APP_SECURITY_GROUP_ID=${APP_SECURITY_GROUP_ID:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds

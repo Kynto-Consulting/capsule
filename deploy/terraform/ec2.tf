@@ -99,9 +99,9 @@ resource "aws_iam_role_policy" "builder_lambda" {
         ]
       },
       {
-        Sid    = "PassLambdaRole"
-        Effect = "Allow"
-        Action = "iam:PassRole"
+        Sid      = "PassLambdaRole"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
         Resource = "arn:aws:iam::${var.aws_account_id}:role/${var.app_name}-lambda-role"
       }
     ]
@@ -155,6 +155,12 @@ resource "aws_instance" "builder" {
 
   user_data = file("${path.module}/user_data.sh")
 
+  # The host holds every app container and database volume. A newer AMI or a
+  # bootstrap-script edit must never replace it; do that deliberately and after a backup.
+  lifecycle {
+    ignore_changes = [ami, user_data]
+  }
+
   root_block_device {
     volume_type           = "gp3"
     volume_size           = 30
@@ -177,4 +183,23 @@ output "builder_public_ip" {
 output "builder_instance_id" {
   description = "Instance ID of the builder EC2 instance"
   value       = aws_instance.builder.id
+}
+
+# Stable public address for the app host. Point db.<domain> (A record) here so
+# database connection strings do not depend on the ALB or on instance replacement.
+resource "aws_eip" "builder" {
+  domain   = "vpc"
+  instance = aws_instance.builder.id
+
+  tags = {
+    Name        = "${var.app_name}-builder"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "capsule"
+  }
+}
+
+output "builder_elastic_ip" {
+  description = "Elastic IP of the app host (target of the db.<domain> A record)"
+  value       = aws_eip.builder.public_ip
 }

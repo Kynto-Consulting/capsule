@@ -35,6 +35,7 @@ Or generate the whole workflow: `capsule ci init`.
 | `timeout` | no | `10m` | Max time to wait for the deployment |
 | `working-directory` | no | `.` | Directory to deploy (monorepos) |
 | `version` | no | `latest` | `@kyntocg/capsule-cli` version to install; pin it for reproducible builds |
+| `cli-package` | no | – | Full npm install spec (tarball URL, workspace path, git URL) that overrides `version`; use it while the CLI is not on npm |
 | `apps-domain` | no | | Apps domain used to build the URL when the API does not return one |
 
 ## Outputs

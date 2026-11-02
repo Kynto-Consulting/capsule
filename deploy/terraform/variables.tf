@@ -58,3 +58,27 @@ variable "alb_certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "db_allowed_cidrs" {
+  description = "CIDRs allowed to reach the ports of databases provisioned by Capsule (docker host ports). Empty = not exposed."
+  type        = list(string)
+  default     = []
+}
+
+variable "db_port_from" {
+  description = "First host port Capsule may publish databases on (CAPSULE_DB_PORT_RANGE)."
+  type        = number
+  default     = 40000
+}
+
+variable "db_port_to" {
+  description = "Last host port Capsule may publish databases on."
+  type        = number
+  default     = 40199
+}
+
+variable "db_extra_ports" {
+  description = "Individual host ports of databases created before the dedicated range existed."
+  type        = list(number)
+  default     = []
+}

@@ -20,9 +20,9 @@ resource "aws_iam_user_policy" "capsule_api" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECRFullAccess"
-        Effect = "Allow"
-        Action = ["ecr:*"]
+        Sid      = "ECRFullAccess"
+        Effect   = "Allow"
+        Action   = ["ecr:*"]
         Resource = "*"
       },
       {
@@ -35,15 +35,15 @@ resource "aws_iam_user_policy" "capsule_api" {
         ]
       },
       {
-        Sid    = "RDSFullAccess"
-        Effect = "Allow"
-        Action = ["rds:*"]
+        Sid      = "RDSFullAccess"
+        Effect   = "Allow"
+        Action   = ["rds:*"]
         Resource = "*"
       },
       {
-        Sid    = "Route53FullAccess"
-        Effect = "Allow"
-        Action = ["route53:*"]
+        Sid      = "Route53FullAccess"
+        Effect   = "Allow"
+        Action   = ["route53:*"]
         Resource = "*"
       },
       {
@@ -85,6 +85,26 @@ resource "aws_iam_user_policy" "capsule_api" {
           "ssm:TerminateSession"
         ]
         Resource = "*"
+      },
+      {
+        # Per-database network access: Capsule adds/removes ingress rules on the app host SG only.
+        Sid    = "AppSGManageIngress"
+        Effect = "Allow"
+        Action = [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupIngress"
+        ]
+        Resource = aws_security_group.app.arn
+      },
+      {
+        # Describe* does not support resource-level permissions in EC2.
+        Sid    = "DescribeSecurityGroups"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSecurityGroupRules"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -107,9 +127,9 @@ resource "aws_iam_role_policy" "lambda_inline" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Sid      = "CloudWatchLogs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:*:*:*"
       }
     ]
