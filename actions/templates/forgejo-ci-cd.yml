@@ -1,0 +1,111 @@
+# Capsule CI/CD for Forgejo / Gitea Actions: ci -> deploy (main) -> wait-healthy -> rollback on
+# failure, plus an ephemeral preview per pull request removed when the PR is closed.
+#
+# Copy to .forgejo/workflows/capsule.yml (or .gitea/workflows/).
+#
+# HOW THE CAPSULE ACTIONS ARE REFERENCED
+# Forgejo/Gitea runners do not reliably resolve `owner/repo/subdir@ref` composite actions, and an
+# air-gapped instance may not reach another forge at all. The robust option is to VENDOR the
+# actions into the repository and use local paths (this template does that):
+#
+#   .forgejo/actions/capsule/_lib/        <- shared helpers: must sit next to the actions
+#   .forgejo/actions/capsule/deploy/
+#   .forgejo/actions/capsule/preview/
+#   .forgejo/actions/capsule/rollback/
+#   .forgejo/actions/capsule/vars/
+#   .forgejo/actions/capsule/wait-healthy/
+#
+# Vendoring, pinned to an exact tag or commit (pick one):
+#   a) plain git (no extra tooling; `git subtree` cannot extract a sub-folder of the SOURCE repo):
+#        git remote add capsule <capsule-repo-url>
+#        git fetch capsule <TAG-or-SHA>
+#        git read-tree --prefix=.forgejo/actions/capsule -u FETCH_HEAD:actions
+#        git commit -m "vendor capsule actions <TAG-or-SHA>"
+#      Update: git rm -r the folder, repeat read-tree with the new ref, commit.
+#   b) `capsule-dist`: use the distribution tree it produces for the actions and copy it to the
+#      same folder; record the version it reports in the commit message.
+# Either way the vendored folder is reviewed like any other code and the ref stays exact.
+#
+# Alternative without vendoring (instance that can reach your Capsule forge):
+#   uses: https://forge.example.com/kynto/capsule/actions/deploy@v1.0.0
+#   (full URL form; verify your runner version supports subpaths before relying on it).
+#
+# Secrets (repo settings): CAPSULE_TOKEN, CAPSULE_ORG_ID, CAPSULE_PROJECT_ID.
+# Variables:               CAPSULE_API_URL, optional CAPSULE_HEALTH_PATH (default /health).
+# PR comment: the job token needs write access to issues/PRs; if your instance restricts it,
+# create a token and store it as FORGEJO_TOKEN (or GITEA_TOKEN) and pass it as `git-token` below.
+name: Capsule CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    if: github.event.action != 'closed'
+    runs-on: ci
+    steps:
+      # Exact tags, resolved from your instance's default actions registry (data.forgejo.org or mirror).
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: https://data.forgejo.org/actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  deploy:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ci
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - id: capsule
+        uses: ./.forgejo/actions/capsule/deploy
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+          env: |
+            RELEASE=${{ github.sha }}
+          # Con entorno de despliegue (aprobaciones/ventanas): environment: production  (usa capsule promote;
+          # no se combina con env/secret-env: los secretos del entorno los inyecta Capsule al desplegar).
+
+      - uses: ./.forgejo/actions/capsule/wait-healthy
+        with:
+          url: ${{ steps.capsule.outputs.url }}
+          path: ${{ vars.CAPSULE_HEALTH_PATH || '/health' }}
+          deployment-id: ${{ steps.capsule.outputs.deployment-id }}
+          rollback-on-failure: 'true'
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+
+  preview:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ci
+    steps:
+      # The local action path needs the vendored folder, so check out the base repo
+      # (also on close: the closed event runs against the base branch).
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: ./.forgejo/actions/capsule/preview
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+          action: ${{ github.event.action == 'closed' && 'destroy' || 'deploy' }}
+          comment: 'true'
+          provider: forgejo
+          # git-token: ${{ secrets.FORGEJO_TOKEN }}

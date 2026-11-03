@@ -1,0 +1,17 @@
+== (b1) openssl -starttls postgres con -servername (SSLRequest + TLS, passthrough con replay del SSLRequest)
+pg-a.db.test -> subject=CN=A 
+pg-b.db.test -> subject=CN=B 
+== (b2) pgx (cliente Go real; ServerName=host), sslmode=require
+pgx host=pg-a.db.test sslmode=require -> failed to connect to `user=u database=d`: 127.0.0.1:8443 (pg-a.db.test): server error: FATAL: backend=A mode=ssl (SQLSTATE 28000)
+pgx host=pg-b.db.test sslmode=require -> failed to connect to `user=u database=d`: 127.0.0.1:8443 (pg-b.db.test): server error: FATAL: backend=B mode=ssl (SQLSTATE 28000)
+pgx host=pgt-a.db.test sslmode=require -> failed to connect to `user=u database=d`: 127.0.0.1:8443 (pgt-a.db.test): server error: FATAL: backend=TA mode=plain (SQLSTATE 28000)
+pgx host=pgt-b.db.test sslmode=require -> failed to connect to `user=u database=d`: 127.0.0.1:8443 (pgt-b.db.test): server error: FATAL: backend=TB mode=plain (SQLSTATE 28000)
+== (b3) libpq real (psycopg 3 binary, libpq 18.x) via hostaddr, sslmode=require, sslsni=1 (por defecto)
+libpq 180006 pg-a.db.test [] -> connection failed: connection to server at "127.0.0.1", port 8443 failed: FATAL:  backend=A mode=ssl
+libpq 180006 pg-b.db.test [] -> connection failed: connection to server at "127.0.0.1", port 8443 failed: FATAL:  backend=B mode=ssl
+libpq 180006 pgt-a.db.test [] -> connection failed: connection to server at "127.0.0.1", port 8443 failed: FATAL:  backend=TA mode=plain
+libpq 180006 pgt-b.db.test [] -> connection failed: connection to server at "127.0.0.1", port 8443 failed: FATAL:  backend=TB mode=plain
+== (b4) libpq 17+ sslnegotiation=direct (ALPN postgresql, sin SSLRequest)
+libpq 180006 pgd.db.test ['sslnegotiation=direct'] -> connection failed: connection to server at "127.0.0.1", port 8443 failed: FATAL:  backend=D mode=direct alpn=postgresql
+== (b5) libpq sslsni=0 (sin SNI): el gateway no puede enrutar
+libpq 180006 pg-a.db.test ['sslsni=0'] -> connection failed: connection to server at "127.0.0.1", port 8443 failed: SSL error: unexpected eof while reading

@@ -32,6 +32,8 @@ Or generate the whole workflow: `capsule ci init`.
 | `project-id` | yes | | Project ID |
 | `api-url` | yes | | Capsule API URL |
 | `env` | no | | Deploy-only variables, one `KEY=VALUE` per line |
+| `secret-env` | no | | Like `env`, but every value is masked in the logs with `::add-mask::` before use |
+| `wait-healthy` | no | | Path (e.g. `/health`): after the deploy, wait until `<url><path>` answers 2xx; fails otherwise |
 | `timeout` | no | `10m` | Max time to wait for the deployment |
 | `working-directory` | no | `.` | Directory to deploy (monorepos) |
 | `version` | no | `latest` | `@kyntocg/capsule-cli` version to install; pin it for reproducible builds |
@@ -44,6 +46,7 @@ Or generate the whole workflow: `capsule ci init`.
 |--------|-------------|
 | `url` | Public URL of the app (empty if it could not be determined) |
 | `deployment-id` | Capsule deployment ID |
+| `health` | `healthy` or `unhealthy` when `wait-healthy` is set, empty otherwise |
 
 ## Variables and precedence
 
@@ -117,6 +120,25 @@ Deploy-only overrides go in `env` and beat project and account values for that d
             FEATURE_FLAGS=${{ secrets.FEATURE_FLAGS }}
 ```
 
+### Secret variables and health gate
+
+`secret-env` takes the same `KEY=VALUE` lines as `env` and masks every value before the deploy starts. It is passed to the CLI as a second `--env`. The health wait reuses `actions/wait-healthy` (the `actions/` folder must stay together); for automatic rollback use the standalone wait-healthy action with `rollback-on-failure`.
+
+```yaml
+      - id: capsule
+        uses: kynto-consulting/capsule/actions/deploy@v1.0.0
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+          env: |
+            RELEASE=${{ github.sha }}
+          secret-env: |
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+          wait-healthy: /health
+```
+
 ### Monorepo
 
 Deploy each app to its own Capsule project, only when its folder changes:
@@ -150,7 +172,9 @@ A `deploy`-scoped token is limited to one project, so a matrix over several proj
 
 ### Pull request previews
 
-Capsule has no per-PR ephemeral environments. The generated workflow deploys PRs to a separate, long-lived preview project when the `CAPSULE_PREVIEW_PROJECT_ID` variable is set, and skips the job otherwise (also for PRs from forks, which cannot read secrets). Concurrent PRs overwrite each other on that project.
+Use the [`preview` action](../preview/README.md): it creates an ephemeral `<slug>-pr-<n>` project per pull request, comments the URL once and removes it when the PR closes (server previews endpoints required). The older approach below, a single long-lived preview project, still works but concurrent PRs overwrite each other.
+
+The generated workflow deploys PRs to a separate project when the `CAPSULE_PREVIEW_PROJECT_ID` variable is set, and skips the job otherwise (also for PRs from forks, which cannot read secrets).
 
 ### Rollback
 
@@ -175,7 +199,7 @@ jobs:
           CAPSULE_API_URL: ${{ vars.CAPSULE_API_URL }}
 ```
 
-Whether a `deploy`-scoped token may call rollback depends on the server's scope rules; use a full-access token for this workflow if it is rejected.
+The [`rollback` action](../README.md#rollback) does the same and fails unless the new deployment ends `success`; `wait-healthy` can trigger it automatically. Whether a `deploy`-scoped token may call rollback depends on the server's scope rules; use a full-access token for this workflow if it is rejected.
 
 ### Reusable workflow
 

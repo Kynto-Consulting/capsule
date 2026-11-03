@@ -1,0 +1,7 @@
+name: good2
+on: [push]
+jobs:
+  t:
+    runs-on: [node22]
+    steps:
+      - run: echo ok

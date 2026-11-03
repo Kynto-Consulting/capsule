@@ -40,6 +40,44 @@ services:
       - CAPSULE_DB_PORT_RANGE=${CAPSULE_DB_PORT_RANGE:-}
       # Security group of this host: Capsule adds/removes per-database ingress rules on it (empty = access API answers 501)
       - APP_SECURITY_GROUP_ID=${APP_SECURITY_GROUP_ID:-}
+      # Data backups to S3 (see docs/SELF_HOSTING.md, "Backups"). Off unless a bucket is set or ENABLED=true.
+      - CAPSULE_BACKUPS_ENABLED=${CAPSULE_BACKUPS_ENABLED:-}
+      - CAPSULE_BACKUPS_BUCKET=${CAPSULE_BACKUPS_BUCKET:-}
+      - CAPSULE_BACKUPS_DEFAULT_SCHEDULE=${CAPSULE_BACKUPS_DEFAULT_SCHEDULE:-}
+      - CAPSULE_BACKUPS_DEFAULT_ON=${CAPSULE_BACKUPS_DEFAULT_ON:-}
+      - CAPSULE_BACKUPS_DEFAULT_RETENTION_DAYS=${CAPSULE_BACKUPS_DEFAULT_RETENTION_DAYS:-}
+      - CAPSULE_BACKUPS_BUCKET_RETENTION_DAYS=${CAPSULE_BACKUPS_BUCKET_RETENTION_DAYS:-}
+      - CAPSULE_BACKUPS_HELPER_IMAGE=${CAPSULE_BACKUPS_HELPER_IMAGE:-}
+      - CAPSULE_BACKUPS_PLATFORM_DIR=${CAPSULE_BACKUPS_PLATFORM_DIR:-}
+      - CAPSULE_BACKUPS_DOCKER_CONFIG_DIR=${CAPSULE_BACKUPS_DOCKER_CONFIG_DIR:-}
+      # Core Git (Forgejo) integration: empty CAPSULE_GIT_URL / CAPSULE_GIT_TOKEN = disabled
+      - CAPSULE_GIT_URL=${CAPSULE_GIT_URL:-}
+      # Shared secret with Caddy for /internal/git-auth (empty = the endpoint answers 503)
+      - CAPSULE_GIT_AUTH_SECRET=${CAPSULE_GIT_AUTH_SECRET:-}
+      - CAPSULE_GIT_TOKEN=${CAPSULE_GIT_TOKEN:-}
+      # Web-session of the service account (jobs, logs, cancel, re-run, artifacts of a run): empty password = those routes answer 501 NOT_SUPPORTED
+      - CAPSULE_GIT_BOT_LOGIN=${CAPSULE_GIT_BOT_LOGIN:-}
+      - CAPSULE_GIT_BOT_PASSWORD=${CAPSULE_GIT_BOT_PASSWORD:-}
+      - CAPSULE_GIT_WEB_VERSIONS=${CAPSULE_GIT_WEB_VERSIONS:-}
+      - CAPSULE_GIT_SSH_HOST=${CAPSULE_GIT_SSH_HOST:-}
+      - CAPSULE_PUBLIC_URL=${CAPSULE_PUBLIC_URL:-}
+      # OIDC provider (login for Forgejo)
+      - CAPSULE_OIDC_ISSUER=${CAPSULE_OIDC_ISSUER:-}
+      - CAPSULE_FRONTEND_URL=${CAPSULE_FRONTEND_URL:-}
+      - CAPSULE_OIDC_SIGNING_KEY=${CAPSULE_OIDC_SIGNING_KEY:-}
+      # Deploy robustness: crash-loop detection, build limits, docker cleanup (empty = built-in default)
+      - CAPSULE_DEPLOY_MIN_UPTIME_SECONDS=${CAPSULE_DEPLOY_MIN_UPTIME_SECONDS:-}
+      - CAPSULE_BUILD_MEMORY=${CAPSULE_BUILD_MEMORY:-}
+      - CAPSULE_BUILD_MEMORY_SWAP=${CAPSULE_BUILD_MEMORY_SWAP:-}
+      - CAPSULE_BUILD_CPUS=${CAPSULE_BUILD_CPUS:-}
+      - CAPSULE_BUILD_TIMEOUT_MINUTES=${CAPSULE_BUILD_TIMEOUT_MINUTES:-}
+      - CAPSULE_BUILD_MAX_CONCURRENT=${CAPSULE_BUILD_MAX_CONCURRENT:-}
+      - CAPSULE_BUILD_BUILDER=${CAPSULE_BUILD_BUILDER:-}
+      - CAPSULE_CLEANUP_INTERVAL_HOURS=${CAPSULE_CLEANUP_INTERVAL_HOURS:-}
+      - CAPSULE_CLEANUP_CACHE_MAX_AGE_HOURS=${CAPSULE_CLEANUP_CACHE_MAX_AGE_HOURS:-}
+      - CAPSULE_CLEANUP_KEEP_STORAGE=${CAPSULE_CLEANUP_KEEP_STORAGE:-}
+      - CAPSULE_DISK_PATH=${CAPSULE_DISK_PATH:-}
+      - CAPSULE_DISK_MAX_PERCENT=${CAPSULE_DISK_MAX_PERCENT:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds
@@ -92,7 +130,145 @@ services:
     networks:
       - capsule-net
 
+  # ── Forgejo (git.tumi-ai.com) ──────────────────────────────
+  # Core service. SSH: host 22 (the server's admin SSH lives on 2200). Web goes through git-proxy (Caddy);
+  # nothing else is published. Runbook: deploy/forgejo/README.md
+  # Variables read from the server .env: GIT_VERSION, GIT_DOMAIN, GIT_ROOT_URL, GIT_SSH_PUBLIC_PORT,
+  # GIT_ENABLE_INTERNAL_SIGNIN (emergency only)  (SECRET_KEY/INTERNAL_TOKEN are generated into the volume on first start)
+  git:
+    image: codeberg.org/forgejo/forgejo:${GIT_VERSION:-15.0.11}
+    container_name: capsule-git
+    restart: always
+    mem_limit: 768m
+    ports:
+      - "22:22"
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__server__DOMAIN=${GIT_DOMAIN:-git.tumi-ai.com}
+      - FORGEJO__server__ROOT_URL=${GIT_ROOT_URL:-https://git.tumi-ai.com/}
+      - FORGEJO__server__HTTP_PORT=3000
+      - FORGEJO__server__SSH_DOMAIN=${GIT_DOMAIN:-git.tumi-ai.com}
+      - FORGEJO__server__SSH_PORT=${GIT_SSH_PUBLIC_PORT:-22}
+      - FORGEJO__server__SSH_LISTEN_PORT=22
+      - FORGEJO__server__DISABLE_SSH=false
+      - FORGEJO__server__START_SSH_SERVER=false
+      - FORGEJO__server__LFS_START_SERVER=false
+      - FORGEJO__database__DB_TYPE=sqlite3
+      - FORGEJO__database__PATH=/data/gitea/forgejo.db
+      - FORGEJO__security__INSTALL_LOCK=true
+      - FORGEJO__session__COOKIE_SECURE=true
+      - FORGEJO__service__DISABLE_REGISTRATION=true
+      - FORGEJO__service__REQUIRE_SIGNIN_VIEW=true
+      - FORGEJO__service__ENABLE_INTERNAL_SIGNIN=${GIT_ENABLE_INTERNAL_SIGNIN:-false}
+      - FORGEJO__openid__ENABLE_OPENID_SIGNIN=false
+      - FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION=true
+      - FORGEJO__oauth2_client__ACCOUNT_LINKING=disabled
+      - FORGEJO__oauth2_client__USERNAME=nickname
+      - FORGEJO__oauth2_client__UPDATE_AVATAR=false
+      - FORGEJO__actions__ENABLED=true
+      - FORGEJO__repository__DEFAULT_PRIVATE=private
+      - FORGEJO__repository__DEFAULT_BRANCH=main
+      - FORGEJO__repository__MAX_CREATION_LIMIT=50
+      - FORGEJO__attachment__MAX_SIZE=50
+      - FORGEJO__webhook__ALLOWED_HOST_LIST=${GIT_WEBHOOK_ALLOWED_HOSTS:-external,private}
+      - FORGEJO__mailer__ENABLED=false
+      - FORGEJO__log__LEVEL=Info
+      - FORGEJO__other__SHOW_FOOTER_VERSION=false
+      # Git Capsule theme and surface (A3). Templates/assets come from deploy/forgejo/custom (mounted below).
+      - FORGEJO____APP_NAME=Git Capsule
+      - FORGEJO____APP_SLOGAN=Git, revisión de código, CI/CD y seguridad
+      - FORGEJO____APP_DISPLAY_NAME_FORMAT={APP_NAME}
+      - FORGEJO__ui__THEMES=forgejo-dark
+      - FORGEJO__ui__DEFAULT_THEME=forgejo-dark
+      - FORGEJO__ui_0X2E_meta__AUTHOR=Git Capsule
+      - "FORGEJO__ui_0X2E_meta__DESCRIPTION=Git Capsule: Git, revisión de código, CI/CD y seguridad"
+      - FORGEJO__ui_0X2E_meta__KEYWORDS=git,capsule
+      - FORGEJO__i18n__LANGS=es-ES
+      - FORGEJO__i18n__NAMES=Español
+      - FORGEJO__other__SHOW_FOOTER_POWERED_BY=false
+      - FORGEJO__other__SHOW_FOOTER_TEMPLATE_LOAD_TIME=false
+      - FORGEJO__repository__DISABLED_REPO_UNITS=repo.issues,repo.ext_issues,repo.wiki,repo.ext_wiki,repo.projects,repo.packages
+      - FORGEJO__repository__DEFAULT_REPO_UNITS=repo.code,repo.pulls,repo.actions
+      - FORGEJO__repository__DISABLE_STARS=true
+      - FORGEJO__repository__DISABLE_FORKS=true
+      - FORGEJO__service_0X2E_explore__DISABLE_USERS_PAGE=true
+      - FORGEJO__service_0X2E_explore__DISABLE_ORGANIZATIONS_PAGE=true
+      - FORGEJO__service_0X2E_explore__DISABLE_CODE_PAGE=true
+      - FORGEJO__api__ENABLE_SWAGGER=false
+      # Git over HTTPS with Capsule tokens: Caddy forward_auth sets the trusted header (deploy/forgejo/Caddyfile, INTEGRATION.md).
+      # Forgejo trusts that header from ANY client that reaches git:3000 (REVERSE_PROXY_TRUSTED_PROXIES only affects the client IP,
+      # verified): keep git:3000 reachable only from git-proxy and set GIT_AUTH_HEADER to a secret name (X-GC-<random hex>) in .env.
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION=true
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION_API=false
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTO_REGISTRATION=false
+      - FORGEJO__security__REVERSE_PROXY_AUTHENTICATION_USER=${GIT_AUTH_HEADER:-X-WEBAUTH-USER}
+      - FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES=${GIT_PROXY_TRUSTED_CIDRS:-172.16.0.0/12}
+    volumes:
+      - capsule-git-data:/data
+      - ./deploy/forgejo/custom/templates:/data/gitea/templates:ro
+      - ./deploy/forgejo/custom/public:/data/gitea/public:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - git-edge
+
+  # HTTPS for git.tumi-ai.com: Caddy on host 80/443, automatic Let's Encrypt (HTTP-01), proxy to git:3000.
+  # Variables from .env: GIT_DOMAIN, GIT_ACME_EMAIL.
+  git-proxy:
+    image: caddy:2.11.7-alpine
+    container_name: capsule-git-proxy
+    restart: always
+    mem_limit: 128m
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - GIT_DOMAIN=${GIT_DOMAIN:-git.tumi-ai.com}
+      - GIT_ACME_EMAIL=${GIT_ACME_EMAIL:?set GIT_ACME_EMAIL}
+      # Secret NAME of the trusted-user header Forgejo reads (X-GC-<random>) and shared secret with the backend's /internal/git-auth.
+      - GIT_AUTH_HEADER=${GIT_AUTH_HEADER:-X-WEBAUTH-USER}
+      - CAPSULE_GIT_AUTH_SECRET=${CAPSULE_GIT_AUTH_SECRET:-}
+    volumes:
+      - ./deploy/forgejo/Caddyfile:/etc/caddy/Caddyfile:ro
+      - capsule-git-caddy:/data
+    depends_on:
+      - git
+    networks:
+      - git-edge
+      - capsule-net
+
+  # Forgejo backup: NOT started by `up -d` (profile). Run it from the host cron:
+  #   docker compose -f docker-compose.prod.yml --profile backup run --rm git-backup
+  git-backup:
+    build:
+      context: ./deploy/forgejo
+      args:
+        FORGEJO_VERSION: ${GIT_VERSION:-15.0.11}
+    image: capsule/git-backup:local
+    profiles: ["backup"]
+    mem_limit: 512m
+    entrypoint: ["/usr/local/bin/forgejo-backup.sh"]
+    environment:
+      - BACKUP_BUCKET=${GIT_BACKUP_BUCKET:-}
+      - BACKUP_PASSPHRASE=${GIT_BACKUP_PASSPHRASE:-}
+      - AWS_ACCESS_KEY_ID=${GIT_BACKUP_AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${GIT_BACKUP_AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+    volumes:
+      - capsule-git-data:/data
+    networks:
+      - git-edge
+
 volumes:
+  capsule-git-data:
+    driver: local
+  capsule-git-caddy:
+    driver: local
   capsule-redis-data:
     driver: local
   capsule-build-cache:
@@ -100,4 +276,8 @@ volumes:
 
 networks:
   capsule-net:
+    driver: bridge
+  # Forgejo lives ONLY here (with Caddy and its backup job): any container on capsule-net could otherwise
+  # reach git:3000 and forge the reverse-proxy auth header. The backend talks to Git through the public URL.
+  git-edge:
     driver: bridge

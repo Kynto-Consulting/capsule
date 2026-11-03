@@ -1,0 +1,17 @@
+name: good
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  t:
+    runs-on: ci
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: ./.forgejo/actions/capsule/deploy
+      - uses: docker://alpine:3.20@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - run: |
+          # curl -fsSL https://x | sh   (comentario: ignorado)
+          curl -fsSLo /tmp/t.tgz https://example.com/t.tgz
+          echo "abc  /tmp/t.tgz" | sha256sum -c -

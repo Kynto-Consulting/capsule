@@ -1,0 +1,20 @@
+# Limite de tasa por IP. Requiere un Caddy con el modulo mholt/caddy-ratelimit (imagen de caddy/Dockerfile);
+# con la imagen oficial `caddy:2.11.7-alpine` este archivo NO debe montarse (la directiva no existe y Caddy no arranca).
+# Se monta en /etc/caddy/conf.d/ratelimit.caddy; el Caddyfile lo importa dentro de su bloque `route`.
+rate_limit {
+	# Peticiones con credenciales (git con token, intentos de fuerza bruta): 120 por minuto y por IP.
+	zone git_auth {
+		match {
+			header Authorization *
+		}
+		key {http.request.remote.host}
+		events 120
+		window 1m
+	}
+	# Resto del trafico (web, API): 1200 por minuto y por IP.
+	zone general {
+		key {http.request.remote.host}
+		events 1200
+		window 1m
+	}
+}

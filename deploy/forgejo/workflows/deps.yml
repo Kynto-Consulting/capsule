@@ -1,0 +1,34 @@
+# Compuerta: dependencias vulnerables en cada push/PR. Sustituye a las alertas de Dependabot.
+# Las ACTUALIZACIONES las hace Renovate (dependency-updates.yml / deploy/forgejo/renovate/);
+# el audito programado con issue unico es security-audit.yml.
+name: deps
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    runs-on: node22
+    container:
+      image: node:22.14.0-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: npm audit (solo produccion, falla en high)
+        run: npm audit --omit=dev --audit-level=high
+  osv-scanner:
+    runs-on: ci
+    container:
+      image: ghcr.io/google/osv-scanner:v1.9.2
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+      - name: osv-scanner (lockfiles, go.mod, requirements)
+        run: osv-scanner scan source --recursive .

@@ -1,0 +1,23 @@
+# Compuerta: tipos + lint + pruebas (Node con npm).
+# actions/checkout se toma del espejo code.forgejo.org (no depende de GitHub). Imagen node fijada.
+name: ci-node
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: node22
+    container:
+      image: node:22.14.0-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - run: npm ci
+      - name: Tipos
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint --if-present
+      - name: Pruebas
+        run: npm test --if-present

@@ -1,0 +1,31 @@
+# Despliegue a Capsule al hacer merge a main, tras pasar las compuertas. El job con secretos corre SOLO en
+# la rama protegida (push a main), nunca en pull_request (T3/T5). Los secretos de ENTORNO no existen en Forgejo:
+# los inyecta Capsule en el despliegue (SPEC 5.6/5.7); aqui solo viaja el token de despliegue.
+# La Action se VENDORIZA: copia actions/deploy/ (y _lib, wait-healthy) a .forgejo/actions/capsule-deploy/.
+#
+# Variable CAPSULE_ENVIRONMENT (opcional): si el entorno tiene politica (aprobaciones, ventanas), la accion
+# crea una PROMOCION (capsule promote) en vez de desplegar directo; ver capsule-promote.yml para promover a mano.
+name: capsule-deploy
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: node22
+    container:
+      image: node:22.14.0-bookworm
+    concurrency:
+      group: capsule-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: ./.forgejo/actions/capsule-deploy
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}      # capsule tokens create --scope deploy --project <id>
+          org-id: ${{ vars.CAPSULE_ORG_ID }}
+          project-id: ${{ vars.CAPSULE_PROJECT_ID }}
+          api-url: https://api.tumi-ai.com
+          environment: ${{ vars.CAPSULE_ENVIRONMENT }}

@@ -1,0 +1,40 @@
+# Workflow of the web-session smoke test (backend/internal/gitcore/itest/web_test.go): several jobs and
+# steps, one job that fails, a long one, a secret announced with ::add-mask:: (also printed
+# base64-encoded to prove the re-masking), and an artifact. Runner label: host (no Docker needed;
+# the artifact job needs node in the runner's PATH).
+name: multi
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: host
+    steps:
+      - name: hello
+        run: |
+          echo "hello from build"
+          echo "::add-mask::supersecretvalue42"
+          echo "leak supersecretvalue42 here"
+      - name: transformed
+        run: echo "encoded $(printf 'supersecretvalue42' | base64) end"
+      - name: second
+        run: for i in 1 2 3; do echo "line $i"; done
+  failing:
+    runs-on: host
+    steps:
+      - name: boom
+        run: echo "about to fail"; exit 3
+  longjob:
+    runs-on: host
+    needs: [build]
+    steps:
+      - name: slow
+        run: for i in $(seq 1 40); do echo "tick $i"; sleep 1; done
+  art:
+    runs-on: host
+    steps:
+      - name: make file
+        run: echo "artifact-content-123" > out.txt
+      - name: upload
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: smoke-out
+          path: out.txt

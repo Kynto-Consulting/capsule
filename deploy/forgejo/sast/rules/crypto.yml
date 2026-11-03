@@ -1,0 +1,138 @@
+# Reglas propias: criptografia y manejo de llaves (proyectos que cifran datos por campo).
+rules:
+  - id: tumi-math-random-secret
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Math.random() no es criptograficamente seguro y es predecible. Para tokens, ids de sesion, nonces, OTP o sales
+      usa crypto.randomBytes(32).toString("hex"), crypto.randomUUID() o crypto.getRandomValues.
+    metadata: {category: security, cwe: "CWE-338"}
+    patterns:
+      - pattern-either:
+          - pattern: const $N = <... Math.random() ...>
+          - pattern: let $N = <... Math.random() ...>
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i).*(token|secret|nonce|otp|salt|session|password|apikey|uuid|requestid|userid).*
+
+  - id: tumi-weak-hash-or-cipher
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Algoritmo debil (md5, sha1, DES, RC4 o AES en modo ECB). Usa SHA-256/512 (o HMAC-SHA256) y AES-256-GCM para
+      cifrar. Para contrasenas usa argon2id/scrypt/bcrypt, no un hash rapido.
+    metadata: {category: security, cwe: "CWE-327"}
+    patterns:
+      - pattern-either:
+          - pattern: crypto.createHash("$A", ...)
+          - pattern: crypto.createHmac("$A", ...)
+          - pattern: crypto.createCipheriv("$A", ...)
+          - pattern: crypto.createDecipheriv("$A", ...)
+      - metavariable-regex:
+          metavariable: $A
+          regex: (?i)^(md5|sha1|sha-1|.*ecb.*|des.*|rc4.*)$
+
+  - id: tumi-cipher-fixed-iv
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      IV/nonce fijo (literal) en createCipheriv. Con AES-GCM repetir (llave, nonce) rompe la confidencialidad y la
+      autenticidad. Genera un nonce de 12 bytes nuevo por cada cifrado con crypto.randomBytes(12), guardalo junto al
+      texto cifrado y verifica el authTag al descifrar.
+    metadata: {category: security, cwe: "CWE-329"}
+    pattern-either:
+      - pattern: crypto.createCipheriv($A, $K, "...")
+      - pattern: crypto.createCipheriv($A, $K, Buffer.from("...", ...))
+      - pattern: crypto.createCipheriv($A, $K, Buffer.alloc(...))
+
+  - id: tumi-hmac-nonconstant-compare
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Comparacion de secretos/firmas/HMAC con ===/==: tiene tiempo variable y permite adivinarlos byte a byte. Usa
+      crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) comprobando antes que las longitudes coinciden.
+    metadata: {category: security, cwe: "CWE-208"}
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: $A === $B
+                  - pattern: $A !== $B
+                  - pattern: $A == $B
+                  - pattern: $A != $B
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: '(?i).*(signature|hmac|secret|apikey|api_key|token|digest(\([^()]*\))?)$'
+          - patterns:
+              - pattern-either:
+                  - pattern: $A === $B
+                  - pattern: $A !== $B
+                  - pattern: $A == $B
+                  - pattern: $A != $B
+              - metavariable-regex:
+                  metavariable: $B
+                  regex: '(?i).*(signature|hmac|secret|apikey|api_key|token|digest(\([^()]*\))?)$'
+      # El operando sospechoso debe TERMINAR en un nombre de secreto/firma; se ignoran literales, null/undefined y .length.
+      - pattern-not: $A === "..."
+      - pattern-not: $A !== "..."
+      - pattern-not: $A == "..."
+      - pattern-not: $A != "..."
+      - pattern-not: $A === undefined
+      - pattern-not: $A !== undefined
+      - pattern-not: $A === null
+      - pattern-not: $A !== null
+      - pattern-not: $A === 0
+      - pattern-not: $A !== 0
+      - pattern-not: typeof $A === "..."
+
+  - id: tumi-hardcoded-secret
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Posible secreto o llave escrito en el codigo. Los secretos se leen del entorno/gestor de secretos y nunca se
+      versionan; si ya se subio, rotalo. Si es un id o cabecera publica, renombra la variable.
+    metadata: {category: security, cwe: "CWE-798"}
+    patterns:
+      - pattern-either:
+          - pattern: const $N = "$V"
+          - pattern: let $N = "$V"
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i).*(secret|password|passwd|api_?key|private_?key|token|encryption_?key).*
+      - metavariable-regex:
+          metavariable: $V
+          regex: ^(?:(?:sk|rk)_(?:live|test)_|AKIA[0-9A-Z]{16}|gh[pousr]_|xox[baprs]-|eyJ)|^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9]).{16,}$
+
+  - id: tumi-key-material-in-log
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Material de llave/secreto pasa a un log. Nunca registres llaves, DEKs, KEKs, frases de paso ni su base64/hex;
+      registra solo identificadores (keyId, version) y revisa los logs ya emitidos.
+    metadata: {category: security, cwe: "CWE-532"}
+    patterns:
+      - pattern-either:
+          - pattern: console.$M(..., $K, ...)
+          - pattern: logger.$M(..., $K, ...)
+          - pattern: log.$M(..., $K, ...)
+      - metavariable-regex:
+          metavariable: $K
+          regex: (?i)^(.*(secret|privatekey|masterkey|encryptionkey|datakey|dek|kek|passphrase|keymaterial|rawkey))$
+
+  - id: tumi-key-written-to-disk
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Se escribe material de llave a disco. Las llaves viven en memoria o en un KMS/gestor de secretos; un archivo con
+      la llave acaba en respaldos, imagenes y volumenes. Si es una excepcion (llave local temporal) documentala y
+      protege permisos 0600 fuera del volumen de datos.
+    metadata: {category: security, cwe: "CWE-312"}
+    patterns:
+      - pattern-either:
+          - pattern: fs.writeFileSync($P, $K, ...)
+          - pattern: fs.writeFile($P, $K, ...)
+          - pattern: fs.promises.writeFile($P, $K, ...)
+          - pattern: writeFileSync($P, $K, ...)
+      - metavariable-regex:
+          metavariable: $K
+          regex: (?i)^(.*(secret|privatekey|masterkey|encryptionkey|datakey|dek|kek|passphrase|keymaterial|rawkey))$

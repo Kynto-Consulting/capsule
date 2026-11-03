@@ -1,0 +1,61 @@
+# Compuerta: Terraform fmt/validate + seguridad (trivy config, que incluye las reglas de tfsec, y checkov).
+name: terraform
+on:
+  push:
+    paths: ['**.tf', '**.tftpl']
+  pull_request:
+    paths: ['**.tf', '**.tftpl']
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ci
+    container:
+      image: hashicorp/terraform:1.13.0
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+      - name: fmt
+        run: terraform fmt -check -recursive
+      - name: validate (sin backend ni credenciales)
+        run: |
+          for d in $(find . -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u); do
+            (cd "$d" && terraform init -backend=false -input=false >/dev/null && terraform validate)
+          done
+  tfsec-trivy:
+    runs-on: ci
+    container:
+      image: aquasec/trivy:0.58.1
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+      - name: trivy config
+        run: trivy config --severity HIGH,CRITICAL --exit-code 1 .
+  checkov:
+    runs-on: ci
+    container:
+      image: bridgecrew/checkov:3.2.330
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+      - name: checkov
+        run: checkov -d . --framework terraform --quiet --compact

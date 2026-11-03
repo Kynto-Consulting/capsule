@@ -82,3 +82,101 @@ variable "db_extra_ports" {
   type        = list(number)
   default     = []
 }
+
+# ---------------------------------------------------------------------------
+# Forgejo (git.tumi-ai.com): backups bucket + isolated CI runner
+# ---------------------------------------------------------------------------
+
+variable "forgejo_backup_retention_days" {
+  description = "Days Forgejo dump objects are kept in the backups bucket (current and noncurrent versions)."
+  type        = number
+  default     = 30
+}
+
+variable "ci_runner_enabled" {
+  description = "Create the isolated EC2 instance that runs Forgejo Actions jobs. false = nothing is created."
+  type        = bool
+  default     = false
+}
+
+variable "ci_runner_instance_type" {
+  description = "Instance type of the CI runner host (separate from the Capsule server)."
+  type        = string
+  default     = "t3.large"
+}
+
+variable "ci_runner_spot" {
+  description = "Run the CI runner on a (persistent, stop-on-interruption) spot request."
+  type        = bool
+  default     = true
+}
+
+variable "ci_runner_volume_gb" {
+  description = "Encrypted root volume size for the CI runner (docker layers + job workspaces)."
+  type        = number
+  default     = 60
+}
+
+variable "ci_runner_version" {
+  description = "forgejo-runner version to install (without the leading v). Check https://code.forgejo.org/forgejo/runner/releases."
+  type        = string
+  default     = "13.2.1"
+}
+
+variable "ci_runner_sha256" {
+  description = "SHA-256 of the forgejo-runner-<version>-linux-amd64 binary. REQUIRED when ci_runner_enabled = true; the boot script aborts on mismatch. Default = checksum published for 13.2.1 (forgejo-runner-13.2.1-linux-amd64.sha256), recomputed on the downloaded binary."
+  type        = string
+  default     = "bb369fe1ecb50fdc983c0b1d993f19b0920df6e5864511892b3cdbf16d858b34"
+}
+
+variable "ci_runner_instance_url" {
+  description = "Forgejo base URL the runner registers against."
+  type        = string
+  default     = "https://git.tumi-ai.com"
+}
+
+variable "ci_runner_token_param" {
+  description = "SSM Parameter Store name (SecureString) holding the runner registration token. Created by hand, never by Terraform (keeps it out of state)."
+  type        = string
+  default     = "/capsule/forgejo/runner-registration-token"
+}
+
+variable "ci_runner_labels" {
+  description = "Runner labels in forgejo-runner syntax (label:docker://image)."
+  type        = list(string)
+  default     = ["ci:docker://node:22-bookworm", "node22:docker://node:22-bookworm"]
+}
+
+variable "ci_runner_capacity" {
+  description = "Jobs the runner executes in parallel."
+  type        = number
+  default     = 2
+}
+
+variable "ci_runner_job_memory" {
+  description = "Docker --memory limit applied to every job container."
+  type        = string
+  default     = "2g"
+}
+
+variable "ci_runner_job_cpus" {
+  description = "Docker --cpus limit applied to every job container."
+  type        = string
+  default     = "1.5"
+}
+
+# ---------------------------------------------------------------------------
+# git (Forgejo core service): security group rules for Caddy and SSH
+# ---------------------------------------------------------------------------
+
+variable "git_enabled" {
+  description = "Add SG rules 80/443 (Caddy) and 2200 (admin SSH) for git.tumi-ai.com. false = nothing is created."
+  type        = bool
+  default     = false
+}
+
+variable "admin_ssh_cidrs" {
+  description = "CIDRs allowed to reach the administration SSH on 2200 (key authentication only). Restrict this to your own IPs."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}

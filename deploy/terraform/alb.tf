@@ -4,6 +4,8 @@ resource "aws_lb" "capsule" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = data.aws_subnets.default.ids
+  # "dualstack" only when var.ipv6_enabled (ipv6.tf); the subnets need an IPv6 /64 first.
+  ip_address_type = var.ipv6_enabled ? "dualstack" : "ipv4"
 
   enable_deletion_protection = false
 

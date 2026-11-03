@@ -1,0 +1,81 @@
+# Auditoria de dependencias programada: osv-scanner sobre lockfiles, go.mod e imagenes, y publicacion de los
+# resultados en Git Capsule (POST /security/sarif). Capsule los convierte en alertas con huella estable, aplica
+# supresiones y politica (check capsule/security, bloqueo de despliegue) y cierra (fixed) las que ya no aparecen.
+# Ya NO abre un issue unico en el repo: el estado vive en la pestana Seguridad.
+#
+# Variables del repo:  CAPSULE_API_URL (p. ej. https://app.tumi-ai.com), CAPSULE_ORG_ID, CAPSULE_PROJECT_ID,
+#                      AUDIT_IMAGES (imagenes a escanear, separadas por espacio; opcional).
+# Secreto:             CAPSULE_SECURITY_TOKEN (token cap_ de CI limitado a ESTE proyecto, alcance security:write).
+#
+# Se sube el JSON nativo de osv-scanner (--format json) y no su SARIF: el SARIF de osv-scanner no lleva severidad
+# (todo sale "warning"), el JSON trae max_severity (CVSS) y Capsule lo mapea 9/7/4 a critical/high/medium/low.
+# Capsule acepta ambos formatos en el campo "sarif".
+name: security-audit
+on:
+  schedule:
+    - cron: '37 5 * * *'
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ci
+    container:
+      image: ghcr.io/google/osv-scanner:v1.9.2
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+      - name: osv-scanner
+        env:
+          IMAGES: ${{ vars.AUDIT_IMAGES }}
+        run: |
+          osv-scanner scan source --recursive --format json --output /tmp/osv-source.json . || true
+          for img in $IMAGES; do
+            osv-scanner scan image --format json --output "/tmp/osv-image-$(echo "$img" | tr '/:' '__').json" "$img" || true
+          done
+      - name: Publicar en Git Capsule
+        env:
+          TOKEN: ${{ secrets.CAPSULE_SECURITY_TOKEN }}
+          API_URL: ${{ vars.CAPSULE_API_URL }}
+          ORG_ID: ${{ vars.CAPSULE_ORG_ID }}
+          PROJECT_ID: ${{ vars.CAPSULE_PROJECT_ID }}
+        run: |
+          apk add --no-cache python3 >/dev/null 2>&1 || true
+          cat > /tmp/publish.py <<'PYEOF'
+          import base64, glob, gzip, json, os, sys, urllib.error, urllib.request
+
+          for name in ("TOKEN", "API_URL", "ORG_ID", "PROJECT_ID"):
+              if not os.environ.get(name):
+                  sys.exit("falta %s: configura las variables CAPSULE_* y el secreto CAPSULE_SECURITY_TOKEN" % name)
+
+          # Un solo envio con todos los resultados (fuentes e imagenes): cada subida de la misma herramienta
+          # y rama reemplaza a la anterior (lo que ya no aparece pasa a fixed).
+          merged = {"results": []}
+          for path in sorted(glob.glob("/tmp/osv-*.json")):
+              try:
+                  merged["results"] += json.load(open(path)).get("results") or []
+              except (OSError, ValueError) as exc:
+                  sys.exit("no se pudo leer %s: %s" % (path, exc))
+
+          body = json.dumps({
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "ref": os.environ["GITHUB_REF"],
+              "tool_name": "osv-scanner",
+              "sarif": base64.b64encode(gzip.compress(json.dumps(merged).encode())).decode(),
+          }).encode()
+          url = "%s/api/v1/orgs/%s/projects/%s/security/sarif" % (os.environ["API_URL"].rstrip("/"), os.environ["ORG_ID"], os.environ["PROJECT_ID"])
+          req = urllib.request.Request(url, data=body, method="POST", headers={
+              "Authorization": "Bearer " + os.environ["TOKEN"],
+              "Content-Type": "application/json",
+              "Idempotency-Key": "audit-%s-%s" % (os.environ.get("GITHUB_RUN_ID", "0"), os.environ.get("GITHUB_RUN_NUMBER", "0")),
+          })
+          try:
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  print("Capsule acepto la subida:", resp.status, resp.read().decode()[:300])
+          except urllib.error.HTTPError as exc:
+              sys.exit("Capsule rechazo la subida (%d): %s" % (exc.code, exc.read().decode()[:500]))
+          PYEOF
+          python3 /tmp/publish.py

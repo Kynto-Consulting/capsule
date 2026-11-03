@@ -1,0 +1,35 @@
+# Promocion manual de un SHA a un entorno (p. ej. staging -> production). Capsule evalua rama permitida,
+# checks verdes, politica de seguridad, entorno origen, aprobaciones (ninguna del solicitante), espera y ventana;
+# NO recompila: se reutiliza el artefacto ya probado. Solo workflow_dispatch (lo lanza quien tiene rol deployer).
+name: capsule-promote
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Entorno destino (p. ej. production)'
+        required: true
+      sha:
+        description: 'SHA a promover (por defecto, el de la rama)'
+        required: false
+      from:
+        description: 'Entorno origen que debe tener ese SHA exitoso'
+        required: false
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: node22
+    container:
+      image: node:22.14.0-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: ./.forgejo/actions/capsule-deploy
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ vars.CAPSULE_ORG_ID }}
+          project-id: ${{ vars.CAPSULE_PROJECT_ID }}
+          api-url: https://api.tumi-ai.com
+          environment: ${{ inputs.environment }}
+          sha: ${{ inputs.sha }}
+          from-environment: ${{ inputs.from }}

@@ -1,0 +1,15 @@
+{{- /* Copia de templates/user/auth/signin.tmpl de Forgejo con un bloque de marca antes del formulario. signin_inner (formulario, OAuth, passkeys) NO se copia: se hereda de la version instalada. */ -}}
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content user signin{{if .LinkAccountMode}} icon{{end}}">
+	<div class="ui middle very relaxed page grid">
+		<div class="column tw-flex tw-flex-col tw-gap-4 tw-max-w-2xl tw-m-auto">
+			<div class="gc-login-brand">
+				<img src="{{AssetUrlPrefix}}/img/logo.svg" width="72" height="72" alt="">
+				<h1 class="gc-login-title">Git Capsule</h1>
+				<p class="gc-login-sub">Entra con tu cuenta de Capsule. Este sitio es el respaldo web de tus repositorios.</p>
+			</div>
+			{{template "user/auth/signin_inner" .}}
+		</div>
+	</div>
+</div>
+{{template "base/footer" .}}

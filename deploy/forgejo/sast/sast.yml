@@ -1,0 +1,129 @@
+# SAST (sustituto de CodeQL; CodeQL NO se usa: exige licencia GHAS en repos privados fuera de GitHub).
+# Semgrep OSS + reglas propias (paquete deploy/forgejo/sast, publicado en un repo de la plataforma) y segundas
+# opiniones: gosec (Go), Bandit (Python), eslint-plugin-security + no-unsanitized (JS/TS).
+#
+# Variables de organizacion/repo:
+#   SAST_REPO      repo con el paquete sast, p.ej. platform/sast
+#   SAST_REF       commit SHA FIJADO del paquete (no uses una rama)
+#   SAST_FAIL_ON   high | medium | low | off   (por defecto high)
+# Secreto: SAST_READ_TOKEN (solo lectura de SAST_REPO).
+# Cada job escribe un resumen Markdown en el job summary y falla segun SAST_FAIL_ON.
+name: sast
+on:
+  push:
+  pull_request:
+
+env:
+  SAST_FAIL_ON: ${{ vars.SAST_FAIL_ON || 'high' }}
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ci
+    container:
+      image: semgrep/semgrep:1.183.0
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+      - name: Paquete SAST (reglas propias y scripts) en version fijada
+        env:
+          TOKEN: ${{ secrets.SAST_READ_TOKEN }}
+          REPO: ${{ vars.SAST_REPO }}
+          REF: ${{ vars.SAST_REF }}
+        run: |
+          : "${REPO:?define SAST_REPO}" "${REF:?define SAST_REF (commit SHA)}"
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --no-tags "https://ci:${TOKEN}@${host}/${REPO}.git" /tmp/sast
+          git -C /tmp/sast checkout --force "$REF"
+      - name: Semgrep
+        run: |
+          # Conjuntos del registro (licencia: Semgrep Rules License v1.0; uso interno permitido, NO se redistribuyen)
+          # y reglas propias. --metrics=off: sin telemetria.
+          semgrep scan --metrics=off --json --output /tmp/semgrep.json --error=false \
+            --config p/typescript --config p/javascript --config p/react --config p/nextjs --config p/nodejs \
+            --config p/golang --config p/python --config p/dockerfile --config p/terraform \
+            --config /tmp/sast/rules \
+            --exclude node_modules --exclude .next --exclude dist --exclude 'tests' .
+      - name: Resumen y umbral
+        run: python3 /tmp/sast/scripts/summarize.py semgrep /tmp/semgrep.json
+
+  gosec:
+    runs-on: ci
+    container:
+      image: securego/gosec:2.22.0
+    steps:
+      - name: Checkout y paquete SAST
+        env:
+          TOKEN: ${{ github.token }}
+          SAST_TOKEN: ${{ secrets.SAST_READ_TOKEN }}
+          REPO: ${{ vars.SAST_REPO }}
+          REF: ${{ vars.SAST_REF }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+          git clone --no-tags "https://ci:${SAST_TOKEN}@${host}/${REPO}.git" /tmp/sast
+          git -C /tmp/sast checkout --force "$REF"
+      - name: gosec (se omite si no hay go.mod)
+        run: |
+          find . -name go.mod -not -path './node_modules/*' | grep -q . || { echo "sin Go"; exit 0; }
+          gosec -fmt=json -out=/tmp/gosec.json -no-fail ./... || true
+          apk add --no-cache python3 >/dev/null
+          python3 /tmp/sast/scripts/summarize.py gosec /tmp/gosec.json
+
+  bandit:
+    runs-on: ci
+    container:
+      image: python:3.12.8-bookworm
+    steps:
+      - name: Checkout y paquete SAST
+        env:
+          TOKEN: ${{ github.token }}
+          SAST_TOKEN: ${{ secrets.SAST_READ_TOKEN }}
+          REPO: ${{ vars.SAST_REPO }}
+          REF: ${{ vars.SAST_REF }}
+        run: |
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+          git clone --no-tags "https://ci:${SAST_TOKEN}@${host}/${REPO}.git" /tmp/sast
+          git -C /tmp/sast checkout --force "$REF"
+      - name: Bandit (se omite si no hay Python)
+        run: |
+          find . -name '*.py' -not -path './node_modules/*' | grep -q . || { echo "sin Python"; exit 0; }
+          pip install --quiet bandit==1.8.0
+          bandit -r . -x ./node_modules,./.venv,./tests -f json -o /tmp/bandit.json || true
+          python3 /tmp/sast/scripts/summarize.py bandit /tmp/bandit.json
+
+  eslint-security:
+    runs-on: node22
+    container:
+      image: node:22.14.0-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Paquete SAST
+        env:
+          SAST_TOKEN: ${{ secrets.SAST_READ_TOKEN }}
+          REPO: ${{ vars.SAST_REPO }}
+          REF: ${{ vars.SAST_REF }}
+        run: |
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --no-tags "https://ci:${SAST_TOKEN}@${host}/${REPO}.git" /tmp/sast
+          git -C /tmp/sast checkout --force "$REF"
+      - name: eslint-plugin-security + no-unsanitized (se omite si no hay JS/TS)
+        run: |
+          find . \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \) -not -path './node_modules/*' | grep -q . || { echo "sin JS/TS"; exit 0; }
+          mkdir -p /tmp/eslint-sast && cp /tmp/sast/eslint/eslint.config.mjs /tmp/eslint-sast/
+          (cd /tmp/eslint-sast && npm init -y >/dev/null && npm install --no-audit --no-fund \
+            eslint@9.17.0 eslint-plugin-security@3.0.1 eslint-plugin-no-unsanitized@4.1.2 @typescript-eslint/parser@8.18.2)
+          /tmp/eslint-sast/node_modules/.bin/eslint --config /tmp/eslint-sast/eslint.config.mjs --format json --output-file /tmp/eslint.json . || true
+          python3 /tmp/sast/scripts/summarize.py eslint /tmp/eslint.json

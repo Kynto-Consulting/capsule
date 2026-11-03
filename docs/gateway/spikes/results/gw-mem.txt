@@ -1,0 +1,10 @@
+gw base: VmRSS:	    5632 kB Threads:	5  fds=8
+passthrough N=500 sni=echo.test: VmRSS:	   19968 kB Threads:	15  fds=3008 cpu_ticks=66
+hold establecidas=500 fallidas=0, reteniendo 8s
+passthrough N=2000 sni=echo.test: VmRSS:	   56536 kB Threads:	23  fds=12008 cpu_ticks=469
+hold establecidas=2000 fallidas=0, reteniendo 8s
+terminate N=500 sni=ssh-a.git.test: VmRSS:	   57260 kB Threads:	23  fds=1008 cpu_ticks=699
+hold establecidas=500 fallidas=0, reteniendo 8s
+terminate N=2000 sni=ssh-a.git.test: VmRSS:	  155432 kB Threads:	25  fds=4008 cpu_ticks=1134
+hold establecidas=2000 fallidas=0, reteniendo 8s
+gw tras cerrar: VmRSS:	  156840 kB Threads:	25  fds=8

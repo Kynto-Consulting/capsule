@@ -25,6 +25,18 @@ inputs:
       project and account variables (precedence: deploy > project > account).
     required: false
     default: ''
+  secret-env:
+    description: |
+      Like `env` (KEY=VALUE per line, deploy-only) but every value is masked in the logs with
+      ::add-mask:: before use. Put sensitive values here.
+    required: false
+    default: ''
+  wait-healthy:
+    description: >-
+      Optional path (e.g. /health). When set, after the deploy the action waits until
+      <url><path> answers 2xx (see actions/wait-healthy) and fails otherwise.
+    required: false
+    default: ''
   timeout:
     description: Maximum time to wait for the deployment (e.g. 10m, 30m).
     required: false
@@ -48,6 +60,29 @@ inputs:
     description: Apps domain used to build the public URL when the API does not return one.
     required: false
     default: ''
+  environment:
+    description: >-
+      Name of a Capsule deployment environment (Git Capsule). When set, the action does NOT deploy
+      directly: it runs `capsule promote --to <environment> --wait`, so the environment policy
+      (approvals, windows, required checks) is enforced by the server and the environment's own
+      secrets are injected by Capsule only at deploy time. `env`, `secret-env` and `working-directory`
+      do not apply in this mode (using `env`/`secret-env` with it is an error).
+    required: false
+    default: ''
+  sha:
+    description: Commit SHA to promote (only with `environment`). Defaults to the workflow commit.
+    required: false
+    default: ''
+  from-environment:
+    description: Source environment the SHA must have been deployed to (only with `environment`).
+    required: false
+    default: ''
+  fail-on-pending:
+    description: >-
+      Only with `environment`. `false` (default): a promotion waiting for human approval ends the step
+      successfully with output `status=pending_approval`. `true`: that state fails the step.
+    required: false
+    default: 'false'
 
 outputs:
   url:
@@ -56,12 +91,18 @@ outputs:
   deployment-id:
     description: ID of the Capsule deployment.
     value: ${{ steps.deploy.outputs.deployment-id }}
+  status:
+    description: Promotion status when `environment` is set (success, pending_approval, ...); empty otherwise.
+    value: ${{ steps.promote.outputs.status }}
+  health:
+    description: Result of the optional health wait (`healthy`, `unhealthy` or empty when wait-healthy is not set).
+    value: ${{ steps.health.outputs.result }}
 
 runs:
   using: composite
   steps:
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version: '20'
 
@@ -77,8 +118,50 @@ runs:
           npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}"
         fi
 
+    - name: Promote to environment
+      id: promote
+      if: ${{ inputs.environment != '' }}
+      shell: bash
+      env:
+        CAPSULE_TOKEN: ${{ inputs.token }}
+        CAPSULE_ORG_ID: ${{ inputs.org-id }}
+        CAPSULE_PROJECT_ID: ${{ inputs.project-id }}
+        CAPSULE_API_URL: ${{ inputs.api-url }}
+        CAPSULE_TIMEOUT: ${{ inputs.timeout }}
+        IN_ENVIRONMENT: ${{ inputs.environment }}
+        IN_SHA: ${{ inputs.sha }}
+        IN_FROM: ${{ inputs.from-environment }}
+        IN_ENV: ${{ inputs.env }}
+        IN_SECRET_ENV: ${{ inputs.secret-env }}
+        IN_FAIL_PENDING: ${{ inputs.fail-on-pending }}
+        DEFAULT_SHA: ${{ github.sha }}
+      run: |
+        echo "::add-mask::${CAPSULE_TOKEN}"
+        if [ -n "${IN_ENV//[[:space:]]/}" ] || [ -n "${IN_SECRET_ENV//[[:space:]]/}" ]; then
+          echo "::error::env/secret-env cannot be combined with environment: the environment's own secrets are injected by Capsule at deploy time"
+          exit 1
+        fi
+        case "$IN_ENVIRONMENT" in *[!A-Za-z0-9._-]*|'') echo "::error::invalid environment name"; exit 1;; esac
+        sha="${IN_SHA:-$DEFAULT_SHA}"
+        case "$sha" in *[!0-9a-fA-F]*|'') echo "::error::invalid sha"; exit 1;; esac
+        args=(promote --to "$IN_ENVIRONMENT" --sha "$sha" "--wait=${CAPSULE_TIMEOUT}")
+        [ -n "$IN_FROM" ] && args+=(--from "$IN_FROM")
+        set +e
+        out="$(capsule "${args[@]}" 2>&1)"
+        rc=$?
+        set -e
+        printf '%s\n' "$out"
+        status="$(printf '%s\n' "$out" | sed -n 's/^Promotion [^ ]* to [^:]*: \([a-z_]*\).*/\1/p' | tail -1)"
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        if [ "$rc" -eq 8 ] && [ "$IN_FAIL_PENDING" != "true" ]; then
+          echo "::notice::promotion to ${IN_ENVIRONMENT} is waiting for approval"
+          exit 0
+        fi
+        exit "$rc"
+
     - name: Deploy
       id: deploy
+      if: ${{ inputs.environment == '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -88,6 +171,7 @@ runs:
         CAPSULE_API_URL: ${{ inputs.api-url }}
         CAPSULE_APPS_DOMAIN: ${{ inputs.apps-domain }}
         CAPSULE_DEPLOY_ENV: ${{ inputs.env }}
+        CAPSULE_DEPLOY_SECRET_ENV: ${{ inputs.secret-env }}
         CAPSULE_TIMEOUT: ${{ inputs.timeout }}
       run: |
         echo "::add-mask::${CAPSULE_TOKEN}"
@@ -95,4 +179,42 @@ runs:
         if [ -n "${CAPSULE_DEPLOY_ENV//[[:space:]]/}" ]; then
           args+=(--env "${CAPSULE_DEPLOY_ENV}")
         fi
+        if [ -n "${CAPSULE_DEPLOY_SECRET_ENV//[[:space:]]/}" ]; then
+          # Mask every secret value BEFORE it is used; names and values are never echoed.
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            trimmed="${line#"${line%%[![:space:]]*}"}"
+            case "$trimmed" in ''|'#'*) continue;; esac
+            case "$line" in *=*) ;; *) echo "::error::secret-env: every non-empty line must be KEY=VALUE"; exit 1;; esac
+            v="${line#*=}"
+            [ -n "$v" ] && echo "::add-mask::$v"
+            # also mask the value without one pair of surrounding quotes
+            case "$v" in
+              \"*\") u="${v#\"}"; u="${u%\"}"; [ -n "$u" ] && echo "::add-mask::$u";;
+              \'*\') u="${v#\'}"; u="${u%\'}"; [ -n "$u" ] && echo "::add-mask::$u";;
+            esac
+          done <<< "$CAPSULE_DEPLOY_SECRET_ENV"
+          args+=(--env "${CAPSULE_DEPLOY_SECRET_ENV}")
+        fi
         capsule "${args[@]}"
+
+    - name: Wait for healthy
+      id: health
+      if: ${{ inputs.wait-healthy != '' && inputs.environment == '' }}
+      shell: bash
+      env:
+        WH_URL: ${{ steps.deploy.outputs.url || (inputs.apps-domain != '' && format('https://{0}', inputs.apps-domain) || '') }}
+        WH_PATH: ${{ inputs.wait-healthy }}
+        WH_DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment-id }}
+        CAPSULE_TOKEN: ${{ inputs.token }}
+        CAPSULE_ORG_ID: ${{ inputs.org-id }}
+        CAPSULE_PROJECT_ID: ${{ inputs.project-id }}
+        CAPSULE_API_URL: ${{ inputs.api-url }}
+        CAPSULE_TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        if bash "${{ github.action_path }}/../wait-healthy/wait-healthy.sh"; then
+          echo "result=healthy" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=unhealthy" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi

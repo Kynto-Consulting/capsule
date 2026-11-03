@@ -1,0 +1,111 @@
+name: Capsule Preview
+description: Create/update an ephemeral Capsule preview for a pull request, comment its URL once, and remove it when the PR closes.
+author: Kynto
+
+branding:
+  icon: eye
+  color: blue
+
+inputs:
+  token:
+    description: Capsule API token (cap_...) with scope `deploy` on the PARENT project.
+    required: true
+  org-id:
+    description: Organization ID.
+    required: true
+  project-id:
+    description: Parent project ID (the previews are created from it).
+    required: true
+  api-url:
+    description: Capsule API base URL.
+    required: true
+  action:
+    description: '`deploy` (create/update the preview) or `destroy` (delete it, use on PR close).'
+    required: false
+    default: deploy
+  comment:
+    description: '`true` publishes/updates a single PR comment with the preview URL.'
+    required: false
+    default: 'true'
+  git-token:
+    description: >-
+      Token used to write the PR comment. GitHub: GITHUB_TOKEN with `pull-requests: write`.
+      Forgejo/Gitea: the job token or a FORGEJO_TOKEN/GITEA_TOKEN secret with issue write access.
+    required: false
+    default: ${{ github.token }}
+  provider:
+    description: '`auto` (detected from GITEA_ACTIONS / GITHUB_SERVER_URL), `github` or `forgejo`.'
+    required: false
+    default: auto
+  pr-number:
+    description: Override the PR number (defaults to the pull_request event).
+    required: false
+    default: ''
+  ref:
+    description: Override the branch name (defaults to the PR head ref).
+    required: false
+    default: ''
+  sha:
+    description: Override the commit SHA (defaults to the PR head SHA, not the merge commit).
+    required: false
+    default: ''
+  timeout:
+    description: Maximum time to wait for the preview to be ready.
+    required: false
+    default: 10m
+  version:
+    description: Version of @kyntocg/capsule-cli to install.
+    required: false
+    default: latest
+  cli-package:
+    description: Full npm install spec for the CLI (overrides `version`).
+    required: false
+    default: ''
+
+outputs:
+  url:
+    description: Preview URL (empty on destroy or when skipped).
+    value: ${{ steps.preview.outputs.url }}
+  status:
+    description: Preview status (success, failed, skipped for fork PRs, destroyed).
+    value: ${{ steps.preview.outputs.status }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4.4.0
+      with:
+        node-version: '20'
+
+    # Non-fatal: if the CLI cannot be installed or has no `previews` command, the script
+    # falls back to calling the API with curl.
+    - name: Install Capsule CLI
+      shell: bash
+      env:
+        CAPSULE_CLI_VERSION: ${{ inputs.version }}
+        CAPSULE_CLI_PACKAGE: ${{ inputs.cli-package }}
+      run: |
+        if [ -n "$CAPSULE_CLI_PACKAGE" ]; then
+          npm install --global "$CAPSULE_CLI_PACKAGE" || echo "::warning::CLI install failed; using the API fallback"
+        else
+          npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}" || echo "::warning::CLI install failed; using the API fallback"
+        fi
+
+    - name: Preview
+      id: preview
+      shell: bash
+      env:
+        CAPSULE_TOKEN: ${{ inputs.token }}
+        CAPSULE_ORG_ID: ${{ inputs.org-id }}
+        CAPSULE_PROJECT_ID: ${{ inputs.project-id }}
+        CAPSULE_API_URL: ${{ inputs.api-url }}
+        P_ACTION: ${{ inputs.action }}
+        P_COMMENT: ${{ inputs.comment }}
+        P_GIT_TOKEN: ${{ inputs.git-token }}
+        P_PROVIDER: ${{ inputs.provider }}
+        P_PR_NUMBER: ${{ inputs.pr-number }}
+        P_REF: ${{ inputs.ref }}
+        P_SHA: ${{ inputs.sha }}
+        P_TIMEOUT: ${{ inputs.timeout }}
+      run: bash "${{ github.action_path }}/preview.sh"

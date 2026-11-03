@@ -1,0 +1,72 @@
+name: Capsule Rollback
+description: Roll a Capsule project back to its previous successful deployment and fail unless the result is `success`.
+author: Kynto
+
+branding:
+  icon: rotate-ccw
+  color: orange
+
+inputs:
+  token:
+    description: Capsule API token. Rollback may require a full-access token depending on server scope rules.
+    required: true
+  org-id:
+    description: Organization ID.
+    required: true
+  project-id:
+    description: Project ID to roll back.
+    required: true
+  api-url:
+    description: Capsule API base URL.
+    required: true
+  timeout:
+    description: Maximum time to wait for the rollback deployment (e.g. 10m).
+    required: false
+    default: 10m
+  version:
+    description: Version of @kyntocg/capsule-cli to install.
+    required: false
+    default: latest
+  cli-package:
+    description: Full npm install spec for the CLI (overrides `version`).
+    required: false
+    default: ''
+
+outputs:
+  deployment-id:
+    description: ID of the rollback deployment.
+    value: ${{ steps.rollback.outputs.deployment-id }}
+  status:
+    description: Final status of the rollback deployment.
+    value: ${{ steps.rollback.outputs.status }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4.4.0
+      with:
+        node-version: '20'
+
+    - name: Install Capsule CLI
+      shell: bash
+      env:
+        CAPSULE_CLI_VERSION: ${{ inputs.version }}
+        CAPSULE_CLI_PACKAGE: ${{ inputs.cli-package }}
+      run: |
+        if [ -n "$CAPSULE_CLI_PACKAGE" ]; then
+          npm install --global "$CAPSULE_CLI_PACKAGE"
+        else
+          npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}"
+        fi
+
+    - name: Roll back
+      id: rollback
+      shell: bash
+      env:
+        CAPSULE_TOKEN: ${{ inputs.token }}
+        CAPSULE_ORG_ID: ${{ inputs.org-id }}
+        CAPSULE_PROJECT_ID: ${{ inputs.project-id }}
+        CAPSULE_API_URL: ${{ inputs.api-url }}
+        CAPSULE_TIMEOUT: ${{ inputs.timeout }}
+      run: bash "${{ github.action_path }}/rollback.sh"

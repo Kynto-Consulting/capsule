@@ -1,0 +1,76 @@
+# Reglas propias: sesion, JWT, cookies y CORS.
+rules:
+  - id: tumi-jwt-verify-without-algorithms
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      jwt.verify sin fijar "algorithms": se aceptan los algoritmos que declare el token (confusion HS256/RS256).
+      Pasa siempre { algorithms: ["HS256"] } (o el que uses).
+    metadata: {category: security, cwe: "CWE-347"}
+    patterns:
+      - pattern-either:
+          - pattern: $J.verify($T, $K)
+          - pattern: $J.verify($T, $K, $O)
+      - metavariable-regex:
+          metavariable: $J
+          regex: (?i)^(jwt|jsonwebtoken)$
+      - pattern-not: '$J.verify($T, $K, {..., algorithms: $A, ...})'
+
+  - id: tumi-jwt-alg-none
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Algoritmo "none" en JWT: el token queda sin firma y cualquiera puede falsificarlo. Usa HS256/RS256/ES256.
+    metadata: {category: security, cwe: "CWE-347"}
+    pattern-either:
+      - pattern: '$J.sign($P, $K, {..., algorithm: "none", ...})'
+      - pattern: '$J.verify($T, $K, {..., algorithms: [..., "none", ...], ...})'
+
+  - id: tumi-jwt-decode-for-auth
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      jwt.decode NO verifica la firma. No lo uses para autenticar ni autorizar; usa jwt.verify con algorithms.
+    metadata: {category: security, cwe: "CWE-345"}
+    patterns:
+      - pattern: $J.decode(...)
+      - metavariable-regex:
+          metavariable: $J
+          regex: (?i)^(jwt|jsonwebtoken)$
+
+  - id: tumi-cookie-missing-flags
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      Cookie sin httpOnly/secure/sameSite. Una cookie de sesion debe llevar { httpOnly: true, secure: true,
+      sameSite: "lax" } (o "strict"); sin ellas es legible por JS (XSS), viaja por HTTP y es enviable entre sitios.
+    metadata: {category: security, cwe: "CWE-1004"}
+    patterns:
+      - pattern-either:
+          - pattern: $R.cookie($N, $V)
+          - patterns:
+              - pattern: $R.cookie($N, $V, $O)
+              - pattern-not: '$R.cookie($N, $V, {..., httpOnly: true, ...})'
+          - patterns:
+              - pattern: $R.cookie($N, $V, $O)
+              - pattern-not: '$R.cookie($N, $V, {..., secure: ..., ...})'
+          - patterns:
+              - pattern: $R.cookie($N, $V, $O)
+              - pattern-not: '$R.cookie($N, $V, {..., sameSite: ..., ...})'
+      - metavariable-regex:
+          metavariable: $R
+          regex: (?i)^(res|reply|response)$
+
+  - id: tumi-cors-wildcard-credentials
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      CORS con origen comodin (o reflejado con "true") junto a credentials:true: si se refleja el Origin, cualquier
+      sitio puede leer respuestas autenticadas. Enumera los origenes permitidos. (Excepcion documentada: la API
+      multi-tenant sin cookies y sin credentials.)
+    metadata: {category: security, cwe: "CWE-942"}
+    pattern-either:
+      - pattern: 'cors({..., origin: "*", ..., credentials: true, ...})'
+      - pattern: 'cors({..., credentials: true, ..., origin: "*", ...})'
+      - pattern: 'cors({..., origin: true, ..., credentials: true, ...})'
+      - pattern: 'cors({..., credentials: true, ..., origin: true, ...})'

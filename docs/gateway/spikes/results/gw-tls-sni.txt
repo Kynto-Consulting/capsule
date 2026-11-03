@@ -1,0 +1,4 @@
+== (b0) TLS por SNI, mismo puerto 8443, dos backends (openssl s_client -servername)
+a.test -> subject=CN=A 
+b.test -> subject=CN=B 
+desconocido.test (sin ruta) -> 0

@@ -1,0 +1,3 @@
+== recarga de rutas sin reiniciar (plano de control): se anade c.test y se prueba antes/despues
+antes: 0
+despues (<=1s de refresco): 

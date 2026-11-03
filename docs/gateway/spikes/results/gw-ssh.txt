@@ -1,0 +1,5 @@
+== (c) SSH sobre TLS+SNI con ProxyCommand estandar (OpenSSH OpenSSH_10.2p1 Ubuntu-2ubuntu3.8, OpenSSL 3.5.5 27 Jan 2026), 2 servidores en el mismo puerto
+ssh-a.git.test (openssl s_client -quiet) -> ssh-backend=A
+ssh-b.git.test (openssl s_client -quiet) -> ssh-backend=B
+ssh-a por 'capsule tunnel' stdio (ct) con token -> ssh-backend=A
+ct con token invalido -> 2026/11/03 11:01:54 denegado: "ERR\n" <nil>

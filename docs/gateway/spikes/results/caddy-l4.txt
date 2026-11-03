@@ -1,0 +1,23 @@
+caddy: v2.11.7 h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4=
+== (a) SNI -> 2 backends TLS en el mismo puerto 18443 (passthrough)
+a.test -> subject=CN=A
+b.test -> subject=CN=B
+IPv6 [::1]:18443 a.test -> subject=CN=A
+== (c) SSH sobre TLS+SNI via Caddy (tls handler termina; proxy a sshd plano)
+ssh-a.git.test -> ssh-backend=A
+ssh-b.git.test -> ssh-backend=B
+== (b) PostgreSQL via Caddy l4: libpq 18 real
+libpq 180006 pgt-a.db.test [] -> connection failed: connection to server at "127.0.0.1", port 18443 failed: SSL error: tlsv1 alert no application protocol
+libpq 180006 pgt-b.db.test [] -> connection failed: connection to server at "127.0.0.1", port 18443 failed: SSL error: tlsv1 alert no application protocol
+libpq 180006 pg-a.db.test [] -> connection failed: connection to server at "127.0.0.1", port 18443 failed: SSL error: unexpected eof while reading
+libpq sslnegotiation=direct pgd.db.test:
+libpq 180006 pgd.db.test ['sslnegotiation=direct'] -> connection failed: connection to server at "127.0.0.1", port 18443 failed: FATAL:  backend=D mode=direct alpn=postgresql
+openssl -starttls postgres -servername pgt-a:
+subject=CN=gw
+== (b) reintento con connection_policies alpn postgresql en el handler tls (libpq 17+ manda ALPN postgresql tambien en modo clasico)
+libpq 180006 pgt-a.db.test [] -> connection failed: connection to server at "127.0.0.1", port 18443 failed: FATAL:  backend=TA mode=plain
+libpq 180006 pgt-b.db.test [] -> connection failed: connection to server at "127.0.0.1", port 18443 failed: FATAL:  backend=TB mode=plain
+== memoria caddy-l4 con 2000 conexiones TLS ociosas (passthrough a.test)
+base: VmRSS:	   45056 kB
+N=2000: VmRSS:	  101504 kB fds=4008
+hold establecidas=2000 fallidas=0, reteniendo 8s

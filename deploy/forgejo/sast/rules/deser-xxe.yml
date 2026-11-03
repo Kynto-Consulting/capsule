@@ -1,0 +1,54 @@
+# Reglas propias: deserializacion insegura y XXE.
+rules:
+  - id: tumi-js-unsafe-deserialization
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      node-serialize/unserialize ejecuta codigo embebido en los datos. Usa JSON.parse y valida el esquema (zod).
+    metadata: {category: security, cwe: "CWE-502"}
+    pattern-either:
+      - pattern: $S.unserialize(...)
+      - pattern: unserialize(...)
+
+  - id: tumi-js-xxe-libxml
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Analisis XML con noent:true habilita entidades externas (XXE: lectura de archivos y SSRF). Quita noent o
+      ponlo en false y no resuelvas DTD externos.
+    metadata: {category: security, cwe: "CWE-611"}
+    pattern-either:
+      - pattern: '$L.parseXml($X, {..., noent: true, ...})'
+      - pattern: '$L.parseXmlString($X, {..., noent: true, ...})'
+
+  - id: tumi-py-pickle-loads
+    languages: [python]
+    severity: ERROR
+    message: >-
+      pickle/marshal sobre datos no confiables ejecuta codigo arbitrario. Usa JSON o un formato con esquema.
+    metadata: {category: security, cwe: "CWE-502"}
+    pattern-either:
+      - pattern: pickle.loads(...)
+      - pattern: pickle.load(...)
+      - pattern: marshal.loads(...)
+
+  - id: tumi-py-yaml-unsafe-load
+    languages: [python]
+    severity: ERROR
+    message: >-
+      yaml.load sin SafeLoader permite construir objetos arbitrarios. Usa yaml.safe_load(...).
+    metadata: {category: security, cwe: "CWE-502"}
+    patterns:
+      - pattern: yaml.load(...)
+      - pattern-not: yaml.load(..., Loader=yaml.SafeLoader)
+      - pattern-not: yaml.load(..., Loader=yaml.CSafeLoader)
+
+  - id: tumi-py-xxe-lxml
+    languages: [python]
+    severity: ERROR
+    message: >-
+      lxml con resolve_entities=True permite XXE. Deja resolve_entities=False y no_network=True, o usa defusedxml.
+    metadata: {category: security, cwe: "CWE-611"}
+    pattern-either:
+      - pattern: etree.XMLParser(..., resolve_entities=True, ...)
+      - pattern: lxml.etree.XMLParser(..., resolve_entities=True, ...)

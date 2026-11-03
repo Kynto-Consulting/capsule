@@ -1,0 +1,7 @@
+== (d) latencia y throughput (TLS extremo a extremo: directo vs gateway passthrough; tunel TCP plano)
+directo TLS echo      : lat n=5000 p50=102.773µs p95=185.769µs p99=285.487µs
+gateway passthrough   : lat n=5000 p50=265.128µs p95=401.463µs p99=500.916µs
+directo TCP echo      : lat n=5000 p50=126.289µs p95=209.843µs p99=401.95µs
+tunel (ct) TCP echo   : lat n=5000 p50=348.172µs p95=487.484µs p99=574.096µs
+directo TCP sink      : thr 1024 MB en 0.32s = 3174 MB/s (25.39 Gbit/s)
+tunel (ct) TCP sink   : thr 1024 MB en 1.62s = 632 MB/s (5.05 Gbit/s)

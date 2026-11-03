@@ -1,0 +1,136 @@
+name: Capsule Wait Healthy
+description: Wait until a deployed URL answers with an expected HTTP status (retries with backoff), optionally rolling back on failure.
+author: Kynto
+
+branding:
+  icon: activity
+  color: green
+
+inputs:
+  url:
+    description: Base URL of the deployment (e.g. the `url` output of the deploy action).
+    required: true
+  path:
+    description: Path to probe.
+    required: false
+    default: /
+  expected-status:
+    description: Accepted status, a class (`2xx`) or a comma list (`200,204`).
+    required: false
+    default: 2xx
+  retries:
+    description: Maximum number of attempts.
+    required: false
+    default: '30'
+  interval:
+    description: Seconds before the second attempt; grows by `backoff` up to `max-interval`.
+    required: false
+    default: '10'
+  backoff:
+    description: Multiplier applied to the wait between attempts (1 = constant).
+    required: false
+    default: '1.2'
+  max-interval:
+    description: Upper bound in seconds for the wait between attempts.
+    required: false
+    default: '30'
+  timeout:
+    description: Overall time limit (e.g. 5m), whichever of retries/timeout comes first.
+    required: false
+    default: 10m
+  request-timeout:
+    description: Seconds for each single HTTP request.
+    required: false
+    default: '15'
+  deployment-id:
+    description: Optional. With token/org-id/project-id/api-url the action also reads `health` from the API and fails fast on `unhealthy`.
+    required: false
+    default: ''
+  rollback-on-failure:
+    description: Run `capsule deployments rollback` when the check fails (needs token, org-id, project-id, api-url).
+    required: false
+    default: 'false'
+  token:
+    description: Capsule API token (needed for rollback-on-failure and deployment-id).
+    required: false
+    default: ''
+  org-id:
+    description: Organization ID.
+    required: false
+    default: ''
+  project-id:
+    description: Project ID.
+    required: false
+    default: ''
+  api-url:
+    description: Capsule API base URL.
+    required: false
+    default: ''
+  version:
+    description: Version of @kyntocg/capsule-cli to install (rollback only).
+    required: false
+    default: latest
+  cli-package:
+    description: Full npm install spec for the CLI (rollback only; overrides `version`).
+    required: false
+    default: ''
+
+outputs:
+  healthy:
+    description: '`true` when the URL answered as expected.'
+    value: ${{ steps.wait.outputs.healthy }}
+  status-code:
+    description: Last HTTP status code observed.
+    value: ${{ steps.wait.outputs.status-code }}
+  attempts:
+    description: Number of attempts made.
+    value: ${{ steps.wait.outputs.attempts }}
+  health:
+    description: Server-side health status (`unknown` when not queried).
+    value: ${{ steps.wait.outputs.health }}
+  rolled-back:
+    description: '`true` when a rollback was performed.'
+    value: ${{ steps.wait.outputs.rolled-back }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4.4.0
+      with:
+        node-version: '20'
+
+    - name: Install Capsule CLI (rollback only)
+      if: ${{ inputs.rollback-on-failure == 'true' }}
+      shell: bash
+      env:
+        CAPSULE_CLI_VERSION: ${{ inputs.version }}
+        CAPSULE_CLI_PACKAGE: ${{ inputs.cli-package }}
+      run: |
+        if [ -n "$CAPSULE_CLI_PACKAGE" ]; then
+          npm install --global "$CAPSULE_CLI_PACKAGE"
+        else
+          npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}"
+        fi
+
+    - name: Wait for healthy
+      id: wait
+      shell: bash
+      env:
+        WH_URL: ${{ inputs.url }}
+        WH_PATH: ${{ inputs.path }}
+        WH_EXPECTED: ${{ inputs.expected-status }}
+        WH_RETRIES: ${{ inputs.retries }}
+        WH_INTERVAL: ${{ inputs.interval }}
+        WH_BACKOFF: ${{ inputs.backoff }}
+        WH_MAX_INTERVAL: ${{ inputs.max-interval }}
+        WH_TIMEOUT: ${{ inputs.timeout }}
+        WH_REQUEST_TIMEOUT: ${{ inputs.request-timeout }}
+        WH_DEPLOYMENT_ID: ${{ inputs.deployment-id }}
+        WH_ROLLBACK: ${{ inputs.rollback-on-failure }}
+        CAPSULE_TOKEN: ${{ inputs.token }}
+        CAPSULE_ORG_ID: ${{ inputs.org-id }}
+        CAPSULE_PROJECT_ID: ${{ inputs.project-id }}
+        CAPSULE_API_URL: ${{ inputs.api-url }}
+        CAPSULE_TIMEOUT: ${{ inputs.timeout }}
+      run: bash "${{ github.action_path }}/wait-healthy.sh"

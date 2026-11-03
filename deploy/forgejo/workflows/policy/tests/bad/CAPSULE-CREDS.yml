@@ -1,0 +1,8 @@
+name: bad
+on:
+  push:
+jobs:
+  t:
+    runs-on: ci
+    steps:
+      - run: capsule login --token abc

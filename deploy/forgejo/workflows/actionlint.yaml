@@ -1,0 +1,6 @@
+# Etiquetas de los runners de Git Capsule (deploy/terraform/runner.tf, ci_untrusted.tf).
+self-hosted-runner:
+  labels:
+    - ci
+    - node22
+    - ci-untrusted

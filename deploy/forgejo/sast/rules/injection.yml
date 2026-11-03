@@ -1,0 +1,95 @@
+# Reglas propias (licencia del repositorio). Riesgos de inyeccion tipicos de Next.js/Node/Prisma.
+rules:
+  - id: tumi-prisma-raw-unsafe
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Uso de $queryRawUnsafe/$executeRawUnsafe con una consulta que no es un literal. Permite inyeccion SQL.
+      Usa la forma etiquetada (prisma.$queryRaw`... ${valor}`) o Prisma.sql con parametros; nunca concatenes
+      ni interpoles entrada en el texto SQL.
+    metadata: {category: security, cwe: "CWE-89", owasp: "A03:2021 Injection"}
+    patterns:
+      - pattern-either:
+          - pattern: $P.$queryRawUnsafe(...)
+          - pattern: $P.$executeRawUnsafe(...)
+      - pattern-not: $P.$queryRawUnsafe("...", ...)
+      - pattern-not: $P.$executeRawUnsafe("...", ...)
+
+  - id: tumi-prisma-raw-template-call
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      prisma.$queryRaw/$executeRaw llamado como funcion con una plantilla interpolada: la interpolacion NO se
+      parametriza (solo lo hace la etiqueta de plantilla). Escribe prisma.$queryRaw`SELECT ... ${valor}` (sin
+      parentesis) o usa Prisma.sql.
+    metadata: {category: security, cwe: "CWE-89"}
+    pattern-either:
+      - pattern: $P.$queryRaw(`...${$X}...`)
+      - pattern: $P.$executeRaw(`...${$X}...`)
+      - pattern: Prisma.raw($X)
+
+  - id: tumi-eval-dynamic
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      eval() / new Function() ejecuta texto como codigo; si algun fragmento viene de un usuario o de la red es
+      ejecucion remota de codigo. Reemplaza por JSON.parse, una tabla de funciones permitidas o un parser dedicado.
+    metadata: {category: security, cwe: "CWE-95"}
+    patterns:
+      - pattern-either:
+          - pattern: eval($X)
+          - pattern: new Function(...)
+      - pattern-not: eval("...")
+
+  - id: tumi-child-process-exec-tainted
+    languages: [javascript, typescript]
+    severity: ERROR
+    mode: taint
+    message: >-
+      Entrada no confiable llega a child_process.exec/execSync (shell). Usa execFile/spawn con arreglo de
+      argumentos y shell:false, y valida contra una lista permitida; nunca construyas el comando con texto del usuario.
+    metadata: {category: security, cwe: "CWE-78"}
+    pattern-sources:
+      - pattern-either:
+          - pattern: req.body
+          - pattern: req.query
+          - pattern: req.params
+          - pattern: $REQ.nextUrl.searchParams.get(...)
+    pattern-sanitizers:
+      - pattern: shellEscape(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($C, ...)
+              - pattern: execSync($C, ...)
+              - pattern: child_process.exec($C, ...)
+              - pattern: child_process.execSync($C, ...)
+          - focus-metavariable: $C
+
+  - id: tumi-ssrf-fetch-tainted
+    languages: [javascript, typescript]
+    severity: ERROR
+    mode: taint
+    message: >-
+      Una URL controlada por el usuario llega a fetch/axios/got/http.get (SSRF: el servidor puede llegar a la red
+      interna o al servicio de metadatos). Valida con lista de hosts permitidos y rechaza rangos privados tras
+      resolver el DNS; encapsula eso en assertSafeUrl().
+    metadata: {category: security, cwe: "CWE-918", owasp: "A10:2021 SSRF"}
+    pattern-sources:
+      - pattern-either:
+          - pattern: req.body
+          - pattern: req.query
+          - pattern: req.params
+          - pattern: $REQ.nextUrl.searchParams.get(...)
+    pattern-sanitizers:
+      - pattern: assertSafeUrl(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fetch($U, ...)
+              - pattern: axios($U, ...)
+              - pattern: axios.$M($U, ...)
+              - pattern: got($U, ...)
+              - pattern: http.get($U, ...)
+              - pattern: https.get($U, ...)
+          - focus-metavariable: $U

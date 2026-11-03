@@ -1,0 +1,39 @@
+# Politica de workflows (SPEC 6.3, T3/T6). Check REQUERIDO de la regla de proteccion de .forgejo/workflows/**
+# (CODEOWNERS a administradores). Rechaza: pull_request_target, permissions: write-all, curl | sh, acciones sin SHA
+# (docker:// sin digest), runs-on con etiquetas no registradas, uso de credenciales de usuario del CLI.
+#
+# Instalacion: copia policy/lint-workflows.py a .forgejo/policy/lint-workflows.py del repo y define en
+# Variables de la ORGANIZACION (un PR no puede cambiarlas):
+#   WORKFLOW_POLICY_SHA256   sha256 del lint-workflows.py aprobado (el job falla si el archivo difiere:
+#                            asi un PR no puede debilitar el lint).
+#   WORKFLOW_POLICY_LABELS   etiquetas de runner permitidas (por defecto ci,node22,ci-untrusted)
+# Excepciones aprobadas: .forgejo/workflow-policy.allow con lineas "ruta:REGLA" (tambien bajo CODEOWNERS).
+name: workflow-policy
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  workflow-policy:
+    runs-on: ci
+    container:
+      image: python:3.12.8-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Verificar el lint
+        env:
+          EXPECTED: ${{ vars.WORKFLOW_POLICY_SHA256 }}
+        run: |
+          : "${EXPECTED:?define la variable de organizacion WORKFLOW_POLICY_SHA256}"
+          echo "${EXPECTED}  .forgejo/policy/lint-workflows.py" | sha256sum -c -
+      - name: Lint de workflows
+        env:
+          POLICY_LABELS: ${{ vars.WORKFLOW_POLICY_LABELS || 'ci,node22,ci-untrusted' }}
+        run: |
+          dirs=""
+          for d in .forgejo/workflows .gitea/workflows .github/workflows; do [ -d "$d" ] && dirs="$dirs $d"; done
+          [ -n "$dirs" ] || { echo "sin workflows"; exit 0; }
+          # shellcheck disable=SC2086
+          python3 -I .forgejo/policy/lint-workflows.py --allow .forgejo/workflow-policy.allow $dirs

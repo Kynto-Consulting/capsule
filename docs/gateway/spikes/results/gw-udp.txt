@@ -1,0 +1,2 @@
+== (e) UDP sobre el tunel TLS (trama len16+datos), eco UDP
+UDP eco por tunel: 1000/1000 ok, rtt p50=391us p99=2140us

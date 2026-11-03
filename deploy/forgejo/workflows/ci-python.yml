@@ -1,0 +1,25 @@
+# Compuerta: lint + pruebas (Python). Imagen fijada; checkout fijado por SHA.
+name: ci-python
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ci
+    container:
+      image: python:3.12.8-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Dependencias
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet --upgrade pip
+          if [ -f requirements.txt ]; then /tmp/venv/bin/pip install --quiet -r requirements.txt; fi
+          /tmp/venv/bin/pip install --quiet pytest ruff
+      - name: Lint
+        run: /tmp/venv/bin/ruff check .
+      - name: Pruebas
+        run: /tmp/venv/bin/pytest -q

@@ -1,0 +1,8 @@
+name: bad
+on:
+  pull_request_target:
+jobs:
+  t:
+    runs-on: ci
+    steps:
+      - run: echo x

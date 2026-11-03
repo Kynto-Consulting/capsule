@@ -1,0 +1,170 @@
+/*
+ * Tema Git Capsule para Forgejo (se carga DESPUES de theme-forgejo-dark.css desde templates/custom/header.tmpl).
+ * Los valores son los tokens del dashboard (docs/git-capsule/UX.md seccion 6, frontend/app/globals.css).
+ * Los nombres --color-* son los de Forgejo: al subir de version se comprueban con tests/ (ver README, seccion "Actualizar").
+ */
+:root {
+  /* tokens del dashboard */
+  --gc-bg-base: #000000;
+  --gc-bg-subtle: #0c0c0c;
+  --gc-bg-surface: #111111;
+  --gc-bg-raised: #1e1e1e;
+  --gc-bg-overlay: #262626;
+  --gc-border: rgba(255, 255, 255, 0.09);
+  --gc-border-strong: rgba(255, 255, 255, 0.16);
+  --gc-text: #ededed;
+  --gc-text-secondary: #a1a1a1;
+  --gc-accent: #7c3aed;
+  --gc-accent-light: #a78bfa;
+  --gc-accent-dim: rgba(124, 58, 237, 0.12);
+  --gc-success: #22c55e;
+  --gc-warning: #f59e0b;
+  --gc-error: #ef4444;
+  --gc-info: #3b82f6;
+
+  /* escala neutra: sustituye la "steel" azulada del tema oscuro de Forgejo (el resto del tema se deriva de ella) */
+  --steel-900: #0c0c0c;
+  --steel-850: #0f0f0f;
+  --steel-800: #111111;
+  --steel-750: #151515;
+  --steel-700: #1e1e1e;
+  --steel-650: #262626;
+  --steel-600: #303030;
+  --steel-550: #3c3c3c;
+  --steel-500: #4a4a4a;
+  --steel-450: #5c5c5c;
+  --steel-400: #6e6e6e;
+  --steel-350: #808080;
+  --steel-300: #909090;
+  --steel-250: #a1a1a1;
+  --steel-200: #b4b4b4;
+  --steel-150: #d0d0d0;
+  --steel-100: #ededed;
+
+  /* acento violeta */
+  --color-primary: #7c3aed;
+  --color-primary-contrast: #ffffff;
+  --color-primary-dark-1: #8b5cf6;
+  --color-primary-dark-2: #a78bfa;
+  --color-primary-dark-3: #a78bfa;
+  --color-primary-dark-4: #c4b5fd;
+  --color-primary-dark-5: #c4b5fd;
+  --color-primary-dark-6: #ddd6fe;
+  --color-primary-dark-7: #ede9fe;
+  --color-primary-light-1: #6d28d9;
+  --color-primary-light-2: #5b21b6;
+  --color-primary-light-3: #4c1d95;
+  --color-primary-light-4: #3b1778;
+  --color-primary-light-5: #2e1065;
+  --color-primary-light-6: #2e1065;
+  --color-primary-light-7: #1e0a47;
+  --color-primary-alpha-10: #7c3aed1a;
+  --color-primary-alpha-20: #7c3aed33;
+  --color-primary-alpha-30: #7c3aed4d;
+  --color-primary-alpha-40: #7c3aed66;
+  --color-primary-alpha-50: #7c3aed80;
+  --color-primary-alpha-60: #7c3aed99;
+  --color-primary-alpha-70: #7c3aedb3;
+  --color-primary-alpha-80: #7c3aedcc;
+  --color-primary-alpha-90: #7c3aede6;
+  --color-accent: #a78bfa;
+  --color-small-accent: #3b1778;
+  --color-highlight-fg: #c4b5fd;
+  --color-highlight-bg: #7c3aed33;
+
+  /* superficies */
+  --color-body: #000000;
+  --color-box-header: #0c0c0c;
+  --color-box-body: #111111;
+  --color-box-body-highlight: #1e1e1e;
+  --color-header-wrapper: #0c0c0c;
+  --color-nav-bg: #0c0c0c;
+  --color-nav-hover-bg: #1e1e1e;
+  --color-secondary-nav-bg: #0c0c0c;
+  --color-footer: #0c0c0c;
+  --color-menu: #111111;
+  --color-card: #111111;
+  --fancy-card-bg: #151515;
+  --fancy-card-border: #262626;
+  --color-code-bg: #0c0c0c;
+  --color-markup-code-block: #0c0c0c;
+  --color-markup-code-inline: #1e1e1e;
+  --color-input-background: #0c0c0c;
+  --color-input-border: #2e2e2e;
+  --color-input-border-hover: #444444;
+  --color-input-toggle-background: #262626;
+  --color-button: #1e1e1e;
+  --color-hover: #1e1e1e;
+  --color-active: #262626;
+  --color-timeline: #262626;
+  --color-secondary: #262626;
+  --color-secondary-bg: #1e1e1e;
+  --color-selection-bg: #a78bfa;
+  --color-selection-fg: #000000;
+
+  /* texto */
+  --color-text: #ededed;
+  --color-text-light: #d4d4d4;
+  --color-text-light-1: #c0c0c0;
+  --color-text-light-2: #a1a1a1;
+  --color-text-light-3: #8a8a8a;
+
+  /* estados (semantica fija: verde exito, ambar espera, rojo fallo, azul informacion) */
+  --color-success-bg: #0f2a1a;
+  --color-success-border: #166534;
+  --color-success-text: #86efac;
+  --color-warning-bg: #2a1d07;
+  --color-warning-border: #92400e;
+  --color-warning-text: #fcd34d;
+  --color-error-bg: #2a1010;
+  --color-error-border: #7f1d1d;
+  --color-error-text: #fca5a5;
+  --color-info-bg: #0f1c36;
+  --color-info-border: #1e3a8a;
+  --color-info-text: #93c5fd;
+}
+
+body {
+  font-family: Geist, "Geist Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* marca textual junto al isotipo */
+#navbar-logo img { width: 34px; height: 34px; }
+#navbar-logo::after {
+  content: "Git Capsule";
+  margin-left: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--gc-text);
+  white-space: nowrap;
+}
+@media (max-width: 767.98px) { #navbar-logo::after { display: none; } }
+
+/* sin exploracion publica ni forks ni estrellas: se ocultan sus enlaces (el borde ademas redirige /explore) */
+#navbar a.item[href$="/explore/repos"],
+#navbar a.item[href$="/explore/users"],
+#navbar a.item[href$="/explore/organizations"],
+#navbar a.item[href$="/explore/code"],
+#navbar a.item[href$="/milestones"],
+#navbar a.item[href*="forgejo.org"],
+.page-footer .language { display: none !important; }
+
+/* enlace de vuelta al dashboard */
+#navbar a.item.gc-back { color: var(--gc-accent-light); font-weight: 500; }
+#navbar a.item.gc-back:hover { color: var(--color-primary-dark-4); }
+
+/* pie */
+.page-footer .right-links { gap: 0.75rem; }
+.page-footer .gc-foot { color: var(--gc-text-secondary); }
+.page-footer .gc-foot a { color: var(--gc-accent-light); }
+
+/* login */
+.gc-login-brand { text-align: center; padding: 8px 0 0; }
+.gc-login-title { font-size: 20px; line-height: 28px; font-weight: 600; margin: 8px 0 4px; }
+.gc-login-sub { color: var(--gc-text-secondary); margin: 0; }
+.page-content.signin .ui.attached.segment, .page-content.signin .ui.top.attached.header { border-color: var(--gc-border-strong); }
+
+/* insignias y cajas con radio del dashboard */
+.ui.segment, .ui.attached.segment, .ui.menu { border-radius: 8px; }
+.ui.button { border-radius: 6px; }
+:focus-visible { outline: 2px solid var(--gc-accent); outline-offset: 2px; }

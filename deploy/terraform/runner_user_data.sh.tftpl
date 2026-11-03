@@ -1,0 +1,116 @@
+#!/bin/bash
+# Boot script of the Forgejo CI runner (rendered by Terraform; below only the
+# Terraform placeholders use braces, shell variables are plain $VAR).
+set -euo pipefail
+exec > >(tee /var/log/runner-bootstrap.log) 2>&1
+
+REGION="${region}"
+INSTANCE_URL="${instance_url}"
+TOKEN_PARAM="${token_param}"
+RUNNER_VERSION="${version}"
+RUNNER_SHA256="${sha256}"
+LABELS="${labels}"
+VPC_CIDR="${vpc_cidr}"
+VPC_DNS="${vpc_dns}"
+
+dnf install -y docker iptables-nft
+# Job networks come from a range that cannot collide with the VPC; logs are capped.
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<JSON
+{
+  "default-address-pools": [{"base": "10.200.0.0/16", "size": 24}],
+  "log-driver": "json-file",
+  "log-opts": {"max-size": "20m", "max-file": "3"},
+  "no-new-privileges": true
+}
+JSON
+systemctl enable --now docker
+
+# Egress firewall for job containers: no metadata service, no VPC (except VPC DNS).
+cat > /usr/local/sbin/runner-firewall.sh <<FW
+#!/bin/bash
+set -e
+iptables -N DOCKER-USER 2>/dev/null || true
+iptables -F DOCKER-USER
+iptables -A DOCKER-USER -s 10.200.0.0/16 -d 169.254.0.0/16 -j DROP
+iptables -A DOCKER-USER -s 10.200.0.0/16 -d $VPC_DNS -p udp --dport 53 -j ACCEPT
+iptables -A DOCKER-USER -s 10.200.0.0/16 -d $VPC_DNS -p tcp --dport 53 -j ACCEPT
+iptables -A DOCKER-USER -s 10.200.0.0/16 -d $VPC_CIDR -j DROP
+iptables -A DOCKER-USER -j RETURN
+FW
+chmod 700 /usr/local/sbin/runner-firewall.sh
+cat > /etc/systemd/system/runner-firewall.service <<UNIT
+[Unit]
+Description=Block job containers from metadata and VPC
+After=docker.service
+Requires=docker.service
+Before=forgejo-runner.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/runner-firewall.sh
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+# forgejo-runner binary, checksum verified (abort on mismatch).
+cd /tmp
+curl -fsSL -o forgejo-runner "https://code.forgejo.org/forgejo/runner/releases/download/v$RUNNER_VERSION/forgejo-runner-$RUNNER_VERSION-linux-amd64"
+echo "$RUNNER_SHA256  forgejo-runner" | sha256sum -c -
+install -m 0755 forgejo-runner /usr/local/bin/forgejo-runner
+rm -f forgejo-runner
+
+useradd --system --create-home --home-dir /var/lib/forgejo-runner --shell /sbin/nologin runner || true
+usermod -aG docker runner
+mkdir -p /etc/forgejo-runner
+
+# Job limits. docker_host "-" => the docker socket is NOT mounted into jobs; privileged=false.
+cat > /etc/forgejo-runner/config.yml <<CFG
+log:
+  level: info
+runner:
+  file: /var/lib/forgejo-runner/.runner
+  capacity: ${capacity}
+  timeout: 1h
+container:
+  network: ""
+  privileged: false
+  options: "--memory=${job_memory} --memory-swap=${job_memory} --cpus=${job_cpus} --pids-limit=1024 --security-opt=no-new-privileges"
+  valid_volumes: []
+  docker_host: "-"
+  force_pull: false
+host:
+  workdir_parent: /var/lib/forgejo-runner/workspace
+CFG
+chown -R runner:runner /etc/forgejo-runner
+
+# Registration with a token read from SSM (the instance role can read only that parameter).
+if [ ! -f /var/lib/forgejo-runner/.runner ]; then
+  TOKEN=$(aws ssm get-parameter --region "$REGION" --with-decryption --name "$TOKEN_PARAM" --query Parameter.Value --output text)
+  (cd /var/lib/forgejo-runner && setpriv --reuid=runner --regid=runner --init-groups env HOME=/var/lib/forgejo-runner \
+    /usr/local/bin/forgejo-runner register --no-interactive \
+    --config /etc/forgejo-runner/config.yml \
+    --instance "$INSTANCE_URL" --token "$TOKEN" --name "${runner_name}" --labels "$LABELS")
+  unset TOKEN
+fi
+
+cat > /etc/systemd/system/forgejo-runner.service <<UNIT
+[Unit]
+Description=Forgejo Actions runner
+After=docker.service runner-firewall.service network-online.target
+Requires=docker.service runner-firewall.service
+
+[Service]
+User=runner
+WorkingDirectory=/var/lib/forgejo-runner
+ExecStart=/usr/local/bin/forgejo-runner daemon --config /etc/forgejo-runner/config.yml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now runner-firewall.service forgejo-runner.service

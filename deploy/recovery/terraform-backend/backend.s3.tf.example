@@ -1,0 +1,15 @@
+# PREPARED, NOT ACTIVE. Rename to backend.s3.tf ONLY when you migrate the state (see README.md in this
+# directory). Left with the .example suffix on purpose: Terraform ignores it, so `terraform plan`
+# keeps using the local state until you decide.
+#
+# Native S3 locking (use_lockfile) needs Terraform >= 1.10 (this repo's required_version is >= 1.5:
+# raise it to 1.10 in main.tf at the same time). With an older Terraform use dynamodb_table instead.
+terraform {
+  backend "s3" {
+    bucket       = "capsule-tfstate-REPLACE_WITH_ACCOUNT_ID"
+    key          = "capsule/prod/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true # lock object next to the state: concurrent apply fails instead of corrupting it
+  }
+}

@@ -1,0 +1,52 @@
+# Compuerta: trivy sobre el sistema de archivos (dependencias, secretos, IaC) y sobre la imagen del Dockerfile.
+# La imagen se construye con kaniko: NO hay docker.sock en los jobs (ver README, "Construir imagenes sin socket").
+name: trivy
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  filesystem:
+    runs-on: ci
+    container:
+      image: aquasec/trivy:0.58.1
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          command -v git >/dev/null || apk add --no-cache git
+          host="${GITHUB_SERVER_URL#https://}"
+          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
+          git checkout --force "$GITHUB_SHA"
+      - run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 .
+  image:
+    # Solo tiene efecto si el repo trae Dockerfile en la raiz. kaniko-debug no trae git: se descarga el
+    # codigo como tarball con la API de Forgejo (wget de busybox) en lugar de clonar.
+    runs-on: ci
+    container:
+      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+    steps:
+      - name: Checkout (tarball por API)
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          wget -q --header "Authorization: token ${TOKEN}" -O /tmp/src.tgz "${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}/archive/${GITHUB_SHA}.tar.gz"
+          mkdir -p /tmp/src && tar -xzf /tmp/src.tgz -C /tmp/src --strip-components=1
+      - name: Construir sin push (tar)
+        run: |
+          test -f /tmp/src/Dockerfile || { echo "sin Dockerfile, nada que escanear"; exit 0; }
+          /kaniko/executor --context /tmp/src --dockerfile /tmp/src/Dockerfile --no-push --tar-path /tmp/image.tar
+      - name: Trivy sobre la imagen (binario con checksum)
+        env:
+          TRIVY_VERSION: "0.58.1"
+          TRIVY_SHA256: ${{ vars.TRIVY_LINUX64_SHA256 }}   # sha256 del tar.gz de trivy; definelo en Variables de la organizacion
+        run: |
+          test -f /tmp/image.tar || exit 0
+          : "${TRIVY_SHA256:?define la variable TRIVY_LINUX64_SHA256}"
+          wget -qO /tmp/trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tgz" | sha256sum -c -
+          tar -xzf /tmp/trivy.tgz -C /tmp trivy
+          /tmp/trivy image --input /tmp/image.tar --severity HIGH,CRITICAL --exit-code 1

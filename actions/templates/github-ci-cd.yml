@@ -1,0 +1,109 @@
+# Capsule CI/CD for GitHub Actions: ci -> deploy (main) -> wait-healthy -> rollback on failure,
+# plus an ephemeral preview per pull request that is removed when the PR is closed.
+#
+# Copy to .github/workflows/capsule.yml. Before using it:
+#   * Replace the CAPSULE_ACTIONS_REF placeholders (v1.0.0) with the released tag of the Capsule
+#     actions you want, or better with a full commit SHA (`@<40-char-sha> # v1.0.0`).
+#   * Secrets:   CAPSULE_TOKEN (cap_... token, scope `deploy` on the project), CAPSULE_ORG_ID, CAPSULE_PROJECT_ID
+#   * Variables: CAPSULE_API_URL, and optionally CAPSULE_HEALTH_PATH (default /health)
+#   * Rollback may need a full-access token; if the deploy-scoped token gets a 403 on rollback,
+#     store a second token as CAPSULE_ROLLBACK_TOKEN and swap it in the `rollback-on-failure` step.
+#
+# Third-party actions are pinned to exact tags (pin to commit SHAs if your policy requires it).
+name: Capsule CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# Least privilege for the whole workflow; jobs widen only what they need.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  deploy:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: capsule-deploy-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - id: capsule
+        uses: kynto-consulting/capsule/actions/deploy@v1.0.0
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+          env: |
+            RELEASE=${{ github.sha }}
+          # secret-env: |
+          #   SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+
+      # Health gate: if the new version does not answer 2xx, roll back automatically
+      # and fail the job so the pipeline is red.
+      - uses: kynto-consulting/capsule/actions/wait-healthy@v1.0.0
+        with:
+          url: ${{ steps.capsule.outputs.url }}
+          path: ${{ vars.CAPSULE_HEALTH_PATH || '/health' }}
+          deployment-id: ${{ steps.capsule.outputs.deployment-id }}
+          retries: '30'
+          interval: '10'
+          rollback-on-failure: 'true'
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+
+      - run: echo "Live at ${{ steps.capsule.outputs.url }}"
+
+  # One job covers open/update (deploy) and close (destroy).
+  preview:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # only to create/update the single preview comment
+    concurrency:
+      group: capsule-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      # Run CI before publishing a preview of new commits (skipped on close).
+      - if: github.event.action != 'closed'
+        uses: actions/checkout@v4.2.2
+      - if: github.event.action != 'closed'
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '20'
+          cache: npm
+      - if: github.event.action != 'closed'
+        run: npm ci && npm test
+
+      - uses: kynto-consulting/capsule/actions/preview@v1.0.0
+        with:
+          token: ${{ secrets.CAPSULE_TOKEN }}
+          org-id: ${{ secrets.CAPSULE_ORG_ID }}
+          project-id: ${{ secrets.CAPSULE_PROJECT_ID }}
+          api-url: ${{ vars.CAPSULE_API_URL }}
+          action: ${{ github.event.action == 'closed' && 'destroy' || 'deploy' }}
+          comment: 'true'

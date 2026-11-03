@@ -1,0 +1,112 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Preset compartido (repo platform/renovate-config, archivo default.json). Los repos usan: { \"extends\": [\"local>platform/renovate-config\"] }",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits"
+  ],
+  "dependencyDashboard": false,
+  "timezone": "America/Lima",
+  "schedule": ["before 6am on monday"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 3,
+  "labels": ["dependencies"],
+  "separateMajorMinor": true,
+  "separateMultipleMajor": true,
+  "rangeStrategy": "pin",
+  "automerge": false,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null
+  },
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"],
+    "automerge": false
+  },
+  "enabledManagers": [
+    "npm", "bun", "gomod", "pip_requirements", "pip_setup", "pep621", "poetry", "pipenv",
+    "dockerfile", "docker-compose", "terraform", "terraform-version",
+    "github-actions", "custom.regex"
+  ],
+  "github-actions": {
+    "fileMatch": ["(^|/)\\.(github|forgejo|gitea)/(workflows|actions)/.+\\.ya?ml$"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Imagenes docker: en workflows de Forgejo (image: nombre:tag) para que Renovate fije y actualice",
+      "fileMatch": ["(^|/)\\.(github|forgejo|gitea)/workflows/.+\\.ya?ml$"],
+      "matchStrings": ["image:\\s*(?<depName>[^\\s:@]+):(?<currentValue>[^\\s@]+)(@(?<currentDigest>sha256:[a-f0-9]+))?"],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Agrupar por ecosistema",
+      "matchManagers": ["npm"],
+      "groupName": "npm (no major)",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchManagers": ["gomod"],
+      "groupName": "go modules (no major)",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchManagers": ["pip_requirements", "pip_setup", "pep621", "poetry", "pipenv"],
+      "groupName": "python (no major)",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "imagenes docker (no major)",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "pinDigests": true
+    },
+    {
+      "matchManagers": ["terraform", "terraform-version"],
+      "groupName": "terraform (no major)",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "acciones de CI",
+      "pinDigests": true
+    },
+    {
+      "description": "Los major van siempre en su propio PR, con etiqueta y sin automerge",
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "major"],
+      "automerge": false
+    },
+    {
+      "description": "Unico automerge permitido: parches de devDependencies (el PR solo se fusiona con CI verde)",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": "Runtimes: NUNCA suben solos, requieren aprobacion humana en el Dependency Dashboard",
+      "matchDatasources": ["docker", "node-version", "npm"],
+      "matchPackageNames": ["node", "node-version", "@types/node", "postgres", "library/postgres", "library/node", "redis", "library/redis"],
+      "automerge": false,
+      "labels": ["dependencies", "runtime-review"]
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "automerge": false,
+      "labels": ["dependencies", "runtime-review"]
+    }
+  ]
+}

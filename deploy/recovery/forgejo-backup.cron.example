@@ -1,0 +1,5 @@
+# Forgejo dump every 6 hours (DR-BACKUP.md section 9: RPO of Git 6 h, was daily). Replaces the daily
+# line of deploy/forgejo/README.md section 9 (`17 3 * * *`). Host crontab of the user that runs docker:
+17 */6 * * * cd /opt/capsule && docker compose -f docker-compose.prod.yml --profile backup run --rm git-backup >> /var/log/forgejo-backup.log 2>&1
+# Alert (CloudWatch/cron on another host): no new object under s3://<bucket>/forgejo/ in the last 8 h
+# (6 h cadence plus margin; the old 26 h threshold only fits the daily cadence).

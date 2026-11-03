@@ -1,0 +1,100 @@
+name: Capsule Vars
+description: Sync Capsule account or project variables from a KEY=VALUE block or a file, masking secrets in the logs.
+author: Kynto
+
+branding:
+  icon: key
+  color: purple
+
+inputs:
+  token:
+    description: Capsule API token with permission to write variables.
+    required: false
+    default: ''
+  org-id:
+    description: Organization ID.
+    required: false
+    default: ''
+  project-id:
+    description: Project ID (required for target `project`).
+    required: false
+    default: ''
+  api-url:
+    description: Capsule API base URL.
+    required: false
+    default: ''
+  target:
+    description: '`account` (shared by all projects) or `project`. Defaults to `project` when project-id is set, else `account`.'
+    required: false
+    default: ''
+  variables:
+    description: One KEY=VALUE per line (blank lines and `#` comments ignored; values are single-line).
+    required: false
+    default: ''
+  file:
+    description: Path of a .env style file to read (combined with `variables`).
+    required: false
+    default: ''
+  secret:
+    description: '`true` marks every variable as secret in Capsule and masks every value in the logs.'
+    required: false
+    default: 'false'
+  variable-scope:
+    description: When the variables apply, `build`, `runtime` or `both`.
+    required: false
+    default: runtime
+  dry-run:
+    description: '`true` only lists the variable names that would be set (no API call, no CLI needed).'
+    required: false
+    default: 'false'
+  version:
+    description: Version of @kyntocg/capsule-cli to install.
+    required: false
+    default: latest
+  cli-package:
+    description: Full npm install spec for the CLI (overrides `version`).
+    required: false
+    default: ''
+
+outputs:
+  count:
+    description: Number of variables processed.
+    value: ${{ steps.sync.outputs.count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      if: ${{ inputs.dry-run != 'true' }}
+      uses: actions/setup-node@v4.4.0
+      with:
+        node-version: '20'
+
+    - name: Install Capsule CLI
+      if: ${{ inputs.dry-run != 'true' }}
+      shell: bash
+      env:
+        CAPSULE_CLI_VERSION: ${{ inputs.version }}
+        CAPSULE_CLI_PACKAGE: ${{ inputs.cli-package }}
+      run: |
+        if [ -n "$CAPSULE_CLI_PACKAGE" ]; then
+          npm install --global "$CAPSULE_CLI_PACKAGE"
+        else
+          npm install --global "@kyntocg/capsule-cli@${CAPSULE_CLI_VERSION}"
+        fi
+
+    - name: Sync variables
+      id: sync
+      shell: bash
+      env:
+        CAPSULE_TOKEN: ${{ inputs.token }}
+        CAPSULE_ORG_ID: ${{ inputs.org-id }}
+        CAPSULE_PROJECT_ID: ${{ inputs.project-id }}
+        CAPSULE_API_URL: ${{ inputs.api-url }}
+        V_TARGET: ${{ inputs.target }}
+        V_VARIABLES: ${{ inputs.variables }}
+        V_FILE: ${{ inputs.file }}
+        V_SECRET: ${{ inputs.secret }}
+        V_SCOPE: ${{ inputs.variable-scope }}
+        V_DRY_RUN: ${{ inputs.dry-run }}
+      run: bash "${{ github.action_path }}/vars.sh"

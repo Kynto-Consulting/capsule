@@ -1,0 +1,106 @@
+# Caddy para git.tumi-ai.com (servicio git-proxy). Certificado Let's Encrypt automatico (HTTP-01 por el puerto 80).
+#
+# Variables de entorno (las pone docker-compose.prod.yml; los valores por defecto son para las pruebas de tests/):
+#   GIT_DOMAIN         dominio del sitio (en pruebas: http://localhost:28480, sin TLS)
+#   GIT_ACME_EMAIL     correo de Let's Encrypt
+#   GIT_UPSTREAM       Forgejo (git:3000)
+#   GIT_AUTH_UPSTREAM  backend de Capsule que sirve /internal/git-auth (backend:8080; lo implementa el paquete A7)
+#   CAPSULE_GIT_AUTH_SECRET  secreto que Caddy envia al backend en X-Capsule-Git-Auth (el mismo que lee el backend)
+#   GIT_AUTH_HEADER    nombre de la cabecera de confianza hacia Forgejo (por defecto X-WEBAUTH-USER). En produccion usa un nombre
+#                      secreto y aleatorio (X-GC-<hex>): Forgejo acepta esa cabecera de CUALQUIER origen que llegue a git:3000,
+#                      el nombre secreto es la segunda barrera (la primera es que solo Caddy alcance a Forgejo). Debe ser el mismo
+#                      valor en el servicio git (FORGEJO__security__REVERSE_PROXY_AUTHENTICATION_USER) y en git-proxy.
+#
+# Orden de las reglas (route = orden literal, no el orden interno de directivas de Caddy):
+#   1. borrar cabeceras X-WEBAUTH-* entrantes   2. limites   3. /explore -> /   4. forward_auth en rutas Git con credenciales
+#   5. proxy a Forgejo
+# Contrato de /internal/git-auth: deploy/forgejo/INTEGRATION.md (seccion "Borde de acceso").
+{
+	admin off
+	email {$GIT_ACME_EMAIL:acme@example.invalid}
+	servers {
+		timeouts {
+			# Anti slowloris. Sin read_body ni write: un push o clon grande puede tardar.
+			read_header 10s
+			idle 2m
+		}
+	}
+}
+
+{$GIT_DOMAIN:http://localhost:28480} {
+	encode zstd gzip
+
+	log {
+		output stderr
+		format json
+	}
+
+	# Rutas del protocolo Git por HTTP (con o sin sufijo .git) y LFS.
+	@git_http path_regexp git_http ^/[^/]+/[^/]+/(info/refs|git-upload-pack|git-receive-pack|HEAD|objects/.+|info/lfs/.+)$
+	# Solo las peticiones Git que traen credenciales pasan por forward_auth.
+	@git_auth {
+		path_regexp git_http ^/[^/]+/[^/]+/(info/refs|git-upload-pack|git-receive-pack|HEAD|objects/.+|info/lfs/.+)$
+		header Authorization *
+	}
+	@not_git not path_regexp git_http ^/[^/]+/[^/]+/(info/refs|git-upload-pack|git-receive-pack|HEAD|objects/.+|info/lfs/.+)$
+	@explore path /explore /explore/*
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+		-X-Powered-By
+	}
+
+	route {
+		# 1. Nunca se confia en esta cabecera si viene de fuera: solo la pone forward_auth (abajo).
+		#    Se borran tambien las demas de la familia que Forgejo podria leer.
+		request_header -X-WEBAUTH-USER
+		request_header -{$GIT_AUTH_HEADER:X-WEBAUTH-USER}
+		request_header -X-WEBAUTH-EMAIL
+		request_header -X-WEBAUTH-FULLNAME
+
+		# 2. Limites de cuerpo: pushes por HTTPS hasta 512 MB (repos grandes: usar SSH); el resto, adjuntos de Forgejo (50 MB) con margen.
+		request_body @git_http {
+			max_size 512MB
+		}
+		request_body @not_git {
+			max_size 64MB
+		}
+		# Limite de tasa: ver conf.d/ (modulo opcional, README seccion "Borde de acceso"). Sin ese archivo montado no hay limite en Caddy.
+		import {$GIT_CONF_D:/etc/caddy/conf.d}/*.caddy
+
+		# 3. Sin exploracion publica.
+		redir @explore / 302
+
+		# 4. Autenticacion de Git con tokens cgt_ de Capsule. 2xx sin cabecera = Forgejo autentica por su cuenta;
+		#    2xx con X-WEBAUTH-USER = usuario validado; 401/403/429 = se devuelve tal cual al cliente.
+		#    Si el backend no responde, la peticion falla (no se sigue sin validar).
+		forward_auth @git_auth {$GIT_AUTH_UPSTREAM:backend:8080} {
+			uri /internal/git-auth
+			# Secreto compartido con el backend (CAPSULE_GIT_AUTH_SECRET): sin el, /internal/git-auth responde 503.
+			header_up X-Capsule-Git-Auth {$CAPSULE_GIT_AUTH_SECRET}
+			# El backend responde siempre X-WEBAUTH-USER; aqui se renombra al nombre que lee Forgejo.
+			copy_headers X-WEBAUTH-USER>{$GIT_AUTH_HEADER:X-WEBAUTH-USER}
+		}
+
+		# 4b. Con usuario validado (la cabecera de confianza solo pudo ponerla forward_auth: la entrante se borro en 1),
+		#     se quita Authorization para que Forgejo no intente autenticar el cgt_ como Basic antes del proxy inverso.
+		#     Las credenciales que no son cgt_ (tokens de Forgejo, token de servicio) no activan la cabecera y pasan intactas.
+		@validated header {$GIT_AUTH_HEADER:X-WEBAUTH-USER} *
+		request_header @validated -Authorization
+
+		# 5. Forgejo.
+		reverse_proxy {$GIT_UPSTREAM:git:3000} {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 300s
+				max_conns_per_host 128
+			}
+		}
+	}
+}

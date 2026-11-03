@@ -1,0 +1,15 @@
+{"admin":{"disabled":true},
+ "apps":{
+  "tls":{"certificates":{"load_files":[{"certificate":"/home/arubik/gw/caddy/c.pem","key":"/home/arubik/gw/caddy/k.pem"}]}},
+  "layer4":{"servers":{"s1":{"listen":[":18443"],"routes":[
+   {"match":[{"tls":{"sni":["a.test"]}}],"handle":[{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9001"]}]}]},
+   {"match":[{"tls":{"sni":["b.test"]}}],"handle":[{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9002"]}]}]},
+   {"match":[{"tls":{"sni":["pgd.db.test"],"alpn":["postgresql"]}}],"handle":[{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9103"]}]}]},
+   {"match":[{"tls":{"sni":["ssh-a.git.test"]}}],"handle":[{"handler":"tls"},{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9201"]}]}]},
+   {"match":[{"tls":{"sni":["ssh-b.git.test"]}}],"handle":[{"handler":"tls"},{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9202"]}]}]},
+   {"match":[{"postgres":{}}],"handle":[{"handler":"postgres_tls"},{"handler":"subroute","routes":[
+      {"match":[{"tls":{"sni":["pgt-a.db.test"]}}],"handle":[{"handler":"tls","connection_policies":[{"alpn":["postgresql"]}]},{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9111"]}]}]},
+      {"match":[{"tls":{"sni":["pgt-b.db.test"]}}],"handle":[{"handler":"tls","connection_policies":[{"alpn":["postgresql"]}]},{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9112"]}]}]},
+      {"match":[{"tls":{"sni":["pg-a.db.test"]}}],"handle":[{"handler":"proxy","upstreams":[{"dial":["127.0.0.1:9101"]}]}]}
+   ]}]}
+  ]}}}}}

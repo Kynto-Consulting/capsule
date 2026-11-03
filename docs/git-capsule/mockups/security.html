@@ -1,0 +1,34 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seguridad - Git Capsule</title><style>
+:root{--bg:#000;--sub:#0c0c0c;--surf:#111;--raised:#1e1e1e;--bd:rgba(255,255,255,.09);--bd2:rgba(255,255,255,.16);--tx:#ededed;--tx2:#a1a1a1;--ac:#7c3aed;--acl:#a78bfa;--acd:rgba(124,58,237,.12);--ok:#22c55e;--okd:rgba(34,197,94,.1);--wa:#f59e0b;--wad:rgba(245,158,11,.1);--er:#ef4444;--erd:rgba(239,68,68,.1);--in:#3b82f6;--ind:rgba(59,130,246,.1)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/20px system-ui,-apple-system,Segoe UI,sans-serif}
+a{color:var(--acl);text-decoration:none}.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.app{display:grid;grid-template-columns:200px 1fr;min-height:100vh}.side{background:var(--sub);border-right:1px solid var(--bd);padding:16px 12px}
+.side .logo{font-weight:600;margin-bottom:16px;display:flex;gap:8px;align-items:center}
+.side a{display:block;color:var(--tx2);padding:6px 8px;border-radius:6px}.side a.on{background:var(--acd);color:var(--tx)}
+main{padding:20px 28px;max-width:1100px}h1{font-size:20px;line-height:28px;margin:0 0 4px;font-weight:600}
+.crumb{color:var(--tx2);margin-bottom:12px}.badge{display:inline-block;border-radius:99px;padding:0 8px;font-size:12px;line-height:20px;border:1px solid var(--bd2);color:var(--tx2)}
+.b-ok{background:var(--okd);color:var(--ok);border-color:transparent}.b-wa{background:var(--wad);color:var(--wa);border-color:transparent}.b-er{background:var(--erd);color:var(--er);border-color:transparent}.b-in{background:var(--ind);color:var(--in);border-color:transparent}.b-ac{background:var(--acd);color:var(--acl);border-color:transparent}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin:12px 0 16px;overflow-x:auto}.tabs a{padding:8px 12px;color:var(--tx2);border-bottom:2px solid transparent;white-space:nowrap}.tabs a.on{color:var(--tx);border-color:var(--ac)}
+.card{background:var(--surf);border:1px solid var(--bd);border-radius:8px}.card h3{margin:0;font-size:13px;padding:10px 14px;border-bottom:1px solid var(--bd);color:var(--tx2);font-weight:500}
+.row{display:flex;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--bd)}.row:last-child{border:0}.grow{flex:1;min-width:0}.mut{color:var(--tx2)}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}.btn.sec{background:var(--raised);color:var(--tx);border:1px solid var(--bd2)}.btn[disabled]{opacity:.45;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:1fr 280px;gap:16px}.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+@media(max-width:800px){.app{grid-template-columns:1fr}.side{display:none}.grid{grid-template-columns:1fr}main{padding:16px}}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+</style></head><body><div class="app"><nav class="side" aria-label="Principal"><div class="logo"><img src="../../../frontend/public/logo.png" alt="" width="22" height="22" style="flex-shrink:0"><span>Capsule</span></div><a href="#">Projects</a><a href="#">Deployments</a><a class="on" href="#">Git</a><a href="#">Databases</a><a href="#">Storage</a><a href="#">Settings</a></nav><main>
+<div class="crumb"><a href="#">evvg</a> / <strong style="color:var(--tx)">web</strong> <span class="badge">Privado</span></div>
+<nav class="tabs" aria-label="Repositorio"><a href="#">Código</a><a href="#">Ramas</a><a href="#">Pull requests 3</a><a href="#">Actions</a><a href="#" class="on" aria-current="page">Seguridad 2</a><a href="#">Entornos 1</a><a href="#">Insights</a><a href="#">Ajustes</a></nav>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+<div class="card" style="padding:14px"><div class="mut">Críticas</div><div style="font-size:24px;color:var(--er)">0</div></div>
+<div class="card" style="padding:14px"><div class="mut">Altas</div><div style="font-size:24px;color:#f97316">2</div></div>
+<div class="card" style="padding:14px"><div class="mut">Medias</div><div style="font-size:24px;color:var(--wa)">5</div></div>
+<div class="card" style="padding:14px"><div class="mut">Bajas</div><div style="font-size:24px;color:var(--in)">9</div></div></div>
+<div class="card" style="margin-bottom:16px"><h3>Herramientas</h3><div class="row"><span class="grow">osv-scanner</span><span class="badge b-ok">hace 1 d</span><span class="grow">Semgrep</span><span class="badge b-ok">hace 2 h</span><span class="grow">gitleaks</span><span class="badge b-ok">hace 2 h</span><span class="grow">Renovate</span><span class="badge b-wa">2 PR abiertos</span></div>
+<div class="row"><span class="mut">Política: bloquea merge con alertas <strong style="color:var(--tx)">altas o críticas</strong> nuevas.</span><span class="grow"></span><a href="#">Editar política</a></div></div>
+<div class="tabs"><a class="on" href="#">Dependencias 6</a><a href="#">Código 8</a><a href="#">Secretos 0</a><a href="#">Supresiones 3</a></div>
+<div class="card"><div class="row" style="background:var(--sub)"><span class="mut grow">Filtros: Estado Abierta &middot; Severidad Todas &middot; Rama main</span></div>
+<div class="row"><span class="badge b-er" style="color:#f97316;background:rgba(249,115,22,.12)">Alta</span><div class="grow">lodash 4.17.20: contaminación de prototipo<div class="mono mut">package.json &middot; corregido en 4.17.21 &middot; osv-scanner</div></div><span class="mut">hace 5 d</span><button class="btn sec">Suprimir</button></div>
+<div class="row"><span class="badge b-er" style="color:#f97316;background:rgba(249,115,22,.12)">Alta</span><div class="grow">SQL sin parametrizar<div class="mono mut">src/db.ts:41 &middot; semgrep: custom.sql-template</div></div><span class="mut">hoy</span><button class="btn sec">Suprimir</button></div>
+<div class="row"><span class="badge b-wa">Media</span><div class="grow">Cookie sin flag Secure<div class="mono mut">src/auth.ts:77 &middot; semgrep</div></div><span class="mut">hace 12 d</span><button class="btn sec">Suprimir</button></div></div>
+</main></div></body></html>

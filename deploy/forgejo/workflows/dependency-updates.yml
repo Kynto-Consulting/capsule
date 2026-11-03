@@ -1,0 +1,33 @@
+# Sustituto de Dependabot (version updates): Renovate autoalojado. Esta plantilla lo ejecuta en el runner
+# (alternativa al cron del servidor; ver deploy/forgejo/renovate/README.md). Por defecto dry run: lanza a mano
+# con dry_run=false cuando hayas revisado la salida.
+name: dependency-updates
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'true = solo registra, no abre PRs'
+        default: 'true'
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ci
+    container:
+      image: ghcr.io/renovatebot/renovate:39.100.0
+    steps:
+      - name: Renovate
+        env:
+          RENOVATE_PLATFORM: forgejo
+          RENOVATE_ENDPOINT: https://git.tumi-ai.com/api/v1
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          RENOVATE_GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}   # solo lectura publica, para changelogs
+          RENOVATE_AUTODISCOVER: 'true'
+          RENOVATE_AUTODISCOVER_TOPICS: renovate
+          RENOVATE_GIT_AUTHOR: 'Renovate <renovate@tumi-ai.com>'
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_DRY_RUN: ${{ inputs.dry_run == 'false' && 'null' || 'full' }}
+        run: renovate
