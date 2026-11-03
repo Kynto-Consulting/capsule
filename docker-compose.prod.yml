@@ -163,7 +163,7 @@ services:
       - FORGEJO__service__ENABLE_INTERNAL_SIGNIN=${GIT_ENABLE_INTERNAL_SIGNIN:-false}
       - FORGEJO__openid__ENABLE_OPENID_SIGNIN=false
       - FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION=true
-      - FORGEJO__oauth2_client__ACCOUNT_LINKING=disabled
+      - FORGEJO__oauth2_client__ACCOUNT_LINKING=auto
       - FORGEJO__oauth2_client__USERNAME=nickname
       - FORGEJO__oauth2_client__UPDATE_AVATAR=false
       - FORGEJO__actions__ENABLED=true
@@ -201,7 +201,7 @@ services:
       # verified): keep git:3000 reachable only from git-proxy and set GIT_AUTH_HEADER to a secret name (X-GC-<random hex>) in .env.
       - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION=true
       - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION_API=false
-      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTO_REGISTRATION=false
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTO_REGISTRATION=true
       - FORGEJO__security__REVERSE_PROXY_AUTHENTICATION_USER=${GIT_AUTH_HEADER:-X-WEBAUTH-USER}
       - FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES=${GIT_PROXY_TRUSTED_CIDRS:-172.16.0.0/12}
     volumes:
