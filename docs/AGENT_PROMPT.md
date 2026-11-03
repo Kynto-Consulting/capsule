@@ -135,6 +135,8 @@ capsule ports list                                          # dirección host:pu
 capsule ports add --container 5432 --name pg --my-ip        # allowlist con tu IP pública (/32)
 capsule ports add --container 8080 --cidr 203.0.113.0/24 --cidr 198.51.100.7
 capsule ports add --container 9000                          # privado: nadie puede conectar aún
+capsule ports add --container 7777 --udp --name juego --my-ip      # puerto UDP directo (sin túnel); mismo número en TCP y UDP a la vez
+capsule ports access add 7777 --udp --my-ip                # el acceso y el borrado de un puerto UDP llevan --udp (o --protocol udp)
 capsule ports access add 5432 --my-ip --desc "portátil"     # permite más IPs
 capsule ports access remove 5432 <id-regla|cidr>
 capsule ports remove --container 9000                       # pide confirmación (--yes)

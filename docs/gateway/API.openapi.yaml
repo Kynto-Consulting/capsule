@@ -1,6 +1,6 @@
 # Contrato del gateway universal de Capsule (paquete G1). Fuente de verdad de las rutas del plano de control del gateway.
 # Modelo de datos: backend/internal/repository/migrations/000060-000062; persistencia: backend/internal/gateway/store.
-# `x-status: new` = aun sin handler (lo implementa G3); la forma exacta ya es contrato.
+# `x-status: implemented` = handler probado (G3: pruebas unitarias con fakes y dbtest contra Postgres local). Dueno desde G3: este archivo.
 openapi: 3.1.0
 info:
   title: Capsule Gateway API
@@ -12,7 +12,7 @@ info:
     - El servicio es el NOMBRE del puerto configurado: unico por proyecto, formato etiqueta DNS (`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, 1-63).
     - "No existe" y "no autorizado" son indistinguibles hacia el cliente (misma respuesta y latencia).
     - Los endpoints `/internal/gateway/*` los llama solo el plano de datos con el secreto compartido
-      (cabecera `X-Gateway-Secret`, variable CAPSULE_GATEWAY_SECRET); nunca se exponen por el ALB.
+      (cabecera `X-Gateway-Secret`, variable CAPSULE_GW_SECRET; vacia = endpoints cerrados (503); por el ALB (X-Amzn-Trace-Id) = 403; secreto erroneo = 401, 10 fallos/min por IP = 429); nunca se exponen por el ALB.
   license:
     name: Interna
 servers:
@@ -36,12 +36,12 @@ paths:
         Devuelve la tabla completa de rutas habilitadas (solo servicios con acceso `gateway` habilitado) y los
         arrendamientos de puerto aleatorio activos. Si `since` es igual a la revision actual espera hasta `wait`
         segundos y responde `304`. El gateway reemplaza su tabla de forma atomica y, si el control cae, sigue con la ultima (fail-static).
-      x-status: new
+      x-status: implemented
       x-permission: gateway.internal
       security: [{gatewaySecret: []}]
       parameters:
       - {name: since, in: query, required: false, schema: {type: integer, format: int64, minimum: 0}, description: Revision que el gateway ya tiene.}
-      - {name: wait, in: query, required: false, schema: {type: integer, minimum: 0, maximum: 60, default: 25}}
+      - {name: wait, in: query, required: false, schema: {type: integer, minimum: 0, maximum: 60, default: 25, description: "El servidor limita a 28 s (timeout de peticion de 30 s)."}}
       responses:
         '200':
           description: Tabla completa en la revision indicada.
@@ -59,7 +59,7 @@ paths:
         El gateway pregunta si `principal` puede conectar a la ruta desde `src_ip`. Aplica rol (`project:connect`), lista de IP
         unica del proyecto y limites. Un token no cacheado falla cerrado. `deny_reason` es solo para auditoria interna: hacia el
         cliente final "servicio inexistente" y "no autorizado" son la misma respuesta (status 2 de CAP1 / cierre silencioso en SNI).
-      x-status: new
+      x-status: implemented
       x-permission: gateway.internal
       security: [{gatewaySecret: []}]
       requestBody:
@@ -76,14 +76,14 @@ paths:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
-  /projects/{projectID}/gateway/services:
+  /orgs/{orgID}/projects/{projectID}/gateway/services:
     get:
       tags: [Servicios]
       operationId: gatewayServiceList
       summary: Servicios del proyecto con sus accesos
-      x-status: new
-      x-permission: project:read
-      parameters: [{$ref: '#/components/parameters/ProjectID'}]
+      x-status: implemented
+      x-permission: project.read
+      parameters: [{$ref: "#/components/parameters/OrgID"}, {$ref: "#/components/parameters/ProjectID"}]
       responses:
         '200':
           description: Servicios.
@@ -100,9 +100,9 @@ paths:
       tags: [Servicios]
       operationId: gatewayServiceCreate
       summary: Expone un servicio (crea ruta y acceso gateway)
-      x-status: new
-      x-permission: project:admin
-      parameters: [{$ref: '#/components/parameters/ProjectID'}]
+      x-status: implemented
+      x-permission: project.network
+      parameters: [{$ref: "#/components/parameters/OrgID"}, {$ref: "#/components/parameters/ProjectID"}]
       requestBody:
         required: true
         content:
@@ -121,15 +121,16 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
-  /projects/{projectID}/gateway/services/{service}:
+  /orgs/{orgID}/projects/{projectID}/gateway/services/{service}:
     patch:
       tags: [Servicios]
       operationId: gatewayServiceUpdate
       summary: Cambia accesos habilitados, acceso por defecto o modo de la ruta
-      x-status: new
-      x-permission: project:admin
+      x-status: implemented
+      x-permission: project.network
       parameters:
-      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: "#/components/parameters/OrgID"}
+      - {$ref: "#/components/parameters/ProjectID"}
       - {$ref: '#/components/parameters/ServiceName'}
       requestBody:
         required: true
@@ -149,16 +150,17 @@ paths:
       tags: [Servicios]
       operationId: gatewayServiceDelete
       summary: Cierra el servicio; su puerto aleatorio pasa a cuarentena
-      x-status: new
-      x-permission: project:admin
+      x-status: implemented
+      x-permission: project.network
       parameters:
-      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: "#/components/parameters/OrgID"}
+      - {$ref: "#/components/parameters/ProjectID"}
       - {$ref: '#/components/parameters/ServiceName'}
       responses:
         '204': {description: Eliminado.}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /projects/{projectID}/gateway/services/{service}/connection-info:
+  /orgs/{orgID}/projects/{projectID}/gateway/services/{service}/connection-info:
     get:
       tags: [Conexion]
       operationId: gatewayConnectionInfo
@@ -167,10 +169,11 @@ paths:
         `connection_strings[0]` es el acceso `gateway` cuando esta habilitado; el `direct_port` sigue despues con su `warning`.
         Migracion de contrato en dos pasos: el campo antiguo `connection_string` de las respuestas existentes de bases/puertos
         conserva la cadena directa mientras no se cambie su valor.
-      x-status: new
-      x-permission: project:read
+      x-status: implemented
+      x-permission: project.read
       parameters:
-      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: "#/components/parameters/OrgID"}
+      - {$ref: "#/components/parameters/ProjectID"}
       - {$ref: '#/components/parameters/ServiceName'}
       responses:
         '200':
@@ -180,15 +183,16 @@ paths:
               schema: {$ref: '#/components/schemas/ConnectionInfo'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /projects/{projectID}/gateway/services/{service}/connection-token:
+  /orgs/{orgID}/projects/{projectID}/gateway/services/{service}/connection-token:
     post:
       tags: [Conexion]
       operationId: gatewayConnectionToken
       summary: Emite un token de conexion `cgc_` de vida corta (maximo 5 minutos)
-      x-status: new
-      x-permission: project:connect
+      x-status: implemented
+      x-permission: project.connect
       parameters:
-      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: "#/components/parameters/OrgID"}
+      - {$ref: "#/components/parameters/ProjectID"}
       - {$ref: '#/components/parameters/ServiceName'}
       responses:
         '200':
@@ -203,16 +207,17 @@ paths:
                   expires_at: {type: string, format: date-time}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /projects/{projectID}/gateway/services/{service}/port:
+  /orgs/{orgID}/projects/{projectID}/gateway/services/{service}/port:
     post:
       tags: [Puertos]
       operationId: gatewayPortLease
       summary: Arrienda un puerto aleatorio de respaldo (idempotente por servicio)
       description: Si ya hay un arrendamiento activo lo devuelve tal cual. Aplica cuotas por proyecto y por organizacion.
-      x-status: new
-      x-permission: project:admin
+      x-status: implemented
+      x-permission: project.network
       parameters:
-      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: "#/components/parameters/OrgID"}
+      - {$ref: "#/components/parameters/ProjectID"}
       - {$ref: '#/components/parameters/ServiceName'}
       responses:
         '200':
@@ -240,13 +245,65 @@ paths:
       tags: [Puertos]
       operationId: gatewayPortRelease
       summary: Libera el puerto aleatorio (24 h de cuarentena antes de reutilizarse)
-      x-status: new
-      x-permission: project:admin
+      x-status: implemented
+      x-permission: project.network
       parameters:
-      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: "#/components/parameters/OrgID"}
+      - {$ref: "#/components/parameters/ProjectID"}
       - {$ref: '#/components/parameters/ServiceName'}
       responses:
         '204': {description: Liberado.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /internal/gateway/keys:
+    get:
+      tags: [Interno]
+      operationId: gatewayInternalKeys
+      summary: Claves publicas Ed25519 que verifican los tokens cgc_ (actual primero, luego la anterior)
+      description: Respuesta `{keys:[{kid, alg:"EdDSA", x:<base64url de 32 bytes>}]}`. Vacia si CAPSULE_GW_SIGNING_KEY no esta configurada.
+      x-status: implemented
+      x-permission: gateway.internal
+      security: [{gatewaySecret: []}]
+      responses:
+        '200': {description: Claves publicas.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /orgs/{orgID}/projects/{projectID}/gateway/service-tokens:
+    get:
+      tags: [Servicios]
+      operationId: gatewayServiceTokenList
+      summary: Tokens de servicio `cgs_` del proyecto (nunca incluye el valor)
+      x-status: implemented
+      x-permission: project.network
+      parameters: [{$ref: '#/components/parameters/OrgID'}, {$ref: '#/components/parameters/ProjectID'}]
+      responses:
+        '200': {description: '`{tokens:[{id,name,prefix,service_id,created_at,expires_at,revoked_at,last_used_at}]}`.'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      tags: [Servicios]
+      operationId: gatewayServiceTokenCreate
+      summary: Emite un token de servicio `cgs_` (se muestra una sola vez)
+      description: Cuerpo `{name, service?, expires_in_days?}`; expiracion 1-90 dias (defecto 90); maximo 50 activos por proyecto (`409 quota_exceeded`). Solo se guarda el SHA-256.
+      x-status: implemented
+      x-permission: project.network
+      parameters: [{$ref: '#/components/parameters/OrgID'}, {$ref: '#/components/parameters/ProjectID'}]
+      responses:
+        '201': {description: 'Token creado: los campos de la lista mas `token`.'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /orgs/{orgID}/projects/{projectID}/gateway/service-tokens/{tokenID}:
+    delete:
+      tags: [Servicios]
+      operationId: gatewayServiceTokenRevoke
+      summary: Revoca un token de servicio (efectivo en conexiones nuevas en <= 30 s)
+      x-status: implemented
+      x-permission: project.network
+      parameters:
+      - {$ref: '#/components/parameters/OrgID'}
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {name: tokenID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Revocado.}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
   /orgs/{orgID}/gateway/policy:
@@ -254,8 +311,8 @@ paths:
       tags: [Politica]
       operationId: gatewayPolicyGet
       summary: Politica de la organizacion para conexiones que no pasan por el gateway
-      x-status: new
-      x-permission: org:read
+      x-status: implemented
+      x-permission: org.member
       parameters: [{$ref: '#/components/parameters/OrgID'}]
       responses:
         '200':
@@ -269,8 +326,8 @@ paths:
       operationId: gatewayPolicySet
       summary: Cambia `gateway_policy` (warn | error)
       description: Las clases `metadata` y `other-capsule` del informe de despliegue son error siempre, con cualquier politica.
-      x-status: new
-      x-permission: org:admin
+      x-status: implemented
+      x-permission: org.owner_or_admin
       parameters: [{$ref: '#/components/parameters/OrgID'}]
       requestBody:
         required: true
@@ -329,7 +386,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_request, unauthorized, forbidden, not_found, service_name_taken, port_pool_exhausted, port_quota_exceeded, rate_limited, host_in_use, internal]
+              enum: [invalid_request, unauthorized, forbidden, not_found, not_configured, quota_exceeded, service_name_taken, port_pool_exhausted, port_quota_exceeded, rate_limited, host_in_use, internal]
             message: {type: string}
             hint: {type: string}
             details: {type: object, additionalProperties: true}
@@ -458,7 +515,7 @@ components:
       properties:
         route_id: {type: string, format: uuid}
         src_ip: {type: string, description: 'IPv4 o IPv6 canonica (`::ffff:a.b.c.d` normalizada a IPv4).'}
-        credential_type: {type: string, enum: [cap, cgt, cgc, none]}
+        credential_type: {type: string, enum: [cap, cgs, cgc, cgt, none]}
         credential: {type: string, description: 'Token tal cual; nunca se registra, solo su id/jti.'}
         access: {type: string, enum: [sni_name, capsule_uri, random_port]}
     AuthorizeResponse:

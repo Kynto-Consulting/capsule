@@ -1,0 +1,36 @@
+{
+  "name": "@kyntocg/capsule-gateway",
+  "version": "0.1.0",
+  "description": "Cliente JavaScript/TypeScript del gateway de Capsule (protocolo capsule/1): URI capsule://, túnel TCP sobre TLS 1.3, UDP sobre flujo y túnel local.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./browser": {
+      "import": { "types": "./dist/browser.d.ts", "default": "./dist/browser.js" },
+      "require": { "types": "./dist/browser.d.cts", "default": "./dist/browser.cjs" }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "examples", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -13,7 +13,7 @@ Versión 1: análisis estático al crear el deployment, más observación opcion
 
 ## Qué reconoce
 
-URLs `postgres://`, `postgresql://`, `mysql://`, `mariadb://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `amqp(s)://`, `http(s)://`, `ws(s)://`, `tcp://`, `ssl://`, `kafka://`, `nats://`, `memcached://`, `sqlserver://` y `jdbc:<motor>://`, con IPv4, hostnames, IPv6 entre corchetes (`[::1]:5432`, `postgres://u:p@[2001:db8::1]:5432/db`), puerto implícito por esquema y comodines (`*.db.tumi-ai.com`). Además `host[:port]` en variables `*_HOST`, `*_HOSTNAME`, `*_ADDR`, `*_ADDRESS`, `*_SERVER`, `*_ENDPOINT`, `PGHOST`... (con su `*_PORT` hermano) y `*_URL`, `*_URI`, `*_DSN`, `*_BROKER(S)`. Un `HOST`/`HOSTNAME` a secas y `0.0.0.0`/`::` son direcciones de escucha y no se reportan. Hosts con marcadores sin resolver (`${DB_HOST}`) se ignoran.
+URLs `postgres://`, `postgresql://`, `mysql://`, `mariadb://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `amqp(s)://`, `http(s)://`, `ws(s)://`, `tcp://`, `udp://`, `ssl://`, `kafka://`, `nats://`, `memcached://`, `sqlserver://` y `jdbc:<motor>://`, con IPv4, hostnames, IPv6 entre corchetes (`[::1]:5432`, `postgres://u:p@[2001:db8::1]:5432/db`), puerto implícito por esquema y comodines (`*.db.tumi-ai.com`). Además `host[:port]` en variables `*_HOST`, `*_HOSTNAME`, `*_ADDR`, `*_ADDRESS`, `*_SERVER`, `*_ENDPOINT`, `PGHOST`... (con su `*_PORT` hermano) y `*_URL`, `*_URI`, `*_DSN`, `*_BROKER(S)`. Un `HOST`/`HOSTNAME` a secas y `0.0.0.0`/`::` son direcciones de escucha y no se reportan. Hosts con marcadores sin resolver (`${DB_HOST}`) se ignoran.
 
 ## Catálogo de hallazgos
 
@@ -107,3 +107,7 @@ Insignia "Conexiones" en las listas de deployments (global y del proyecto) y pan
 - `jdbc:oracle:thin:@host:puerto:sid` y listas de hosts con comas en una URL no se reconocen.
 - La observación en ejecución solo aplica a deployments docker en el host (no Fargate, Lambda ni static).
 - El bloqueo `strict` es asíncrono (ver arriba).
+
+### UDP
+
+`udp://host:puerto` se extrae como los demás esquemas. En el análisis en ejecución también se leen `/proc/net/udp` y `udp6`: solo los sockets UDP **conectados** (estado 01) hacia un destino dentro del rango publicado (o el servicio de metadatos) se reportan, como `INTERNAL_DIRECT_PORT` con el endpoint `udp://host:puerto` y la recomendación de usar `capsule://<proyecto>/<servicio>`. Los resolvers (`127.0.0.11:53`) y los sockets UDP sin conectar nunca generan hallazgos. Un contenedor que solo ofrece los archivos UDP sigue contando como no observable.
