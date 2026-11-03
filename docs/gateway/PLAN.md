@@ -210,6 +210,8 @@ Un servicio con **dos accesos** (`gateway` y `direct_port`) es una ruta con dos 
 - Cuotas/límites por proyecto (config): `max_conns` (def. 200), `max_conns_per_ip` (def. 50), `max_routes` (def. 50), `max_random_ports` (5), tasa de conexiones nuevas (def. 20/s por IP, 100/s por proyecto), tamaño de encabezado ≤1 KiB.
 
 ### 5.3 Formato binario del encabezado de enrutamiento `capsule/1` (túnel TCP; la librería Go y la JS implementan **esta** especificación)
+
+> **Nota (G2): la especificación normativa vive en `docs/gateway/PROTOCOL.md` y prevalece sobre este resumen.** Cambios que la especificación obliga a hacer a lo descrito abajo: TLS **≥1.3** (no 1.2; sin 0-RTT); campo `transport` (u8, offset 8: 1 tcp, 2 udp sobre flujo, 3 QUIC futuro) tras `hdr_len`; `auth_type` 4 = token de servicio `cgs_`; `CAPR` añade `ext_len` + TLV de respuesta tras `msg`; status 6 (GatewayBusy); datagramas UDP en QUIC con `session_id` fijo de 8 B. Detalle y motivos en PROTOCOL.md §17. Los vectores de prueba están en `docs/gateway/testvectors/`.
 Transporte: TCP a `tcp.apps.<zona>:443`, TLS ≥1.2 con SNI `tcp.apps.<zona>` y ALPN `capsule/1`. El cliente valida el certificado del gateway (CA pública; no `InsecureSkipVerify` como en el prototipo). Todos los enteros son big-endian.
 ```
 CLIENTE -> GATEWAY (una sola vez, tras el handshake TLS)
@@ -314,7 +316,7 @@ Nota sobre el túnel `capsule/1`: el gateway **termina** TLS del túnel (el enca
 
 ## 10. Librerías cliente (Go y JS/TypeScript) y CLI
 
-Una **especificación única** (`docs/gateway/PROTOCOL.md`, derivada de la sección 5.3) y dos implementaciones.
+Una **especificación única** (`docs/gateway/PROTOCOL.md`, normativa; deriva de la sección 5.3 y la sustituye donde difieran) y dos implementaciones. Vectores en `docs/gateway/testvectors/`; verificador: `python -I docs/gateway/testvectors/verify/verify.py`.
 
 | Paquete | Contenido | Entornos |
 |---|---|---|

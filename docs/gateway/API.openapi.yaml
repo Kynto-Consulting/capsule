@@ -1,0 +1,481 @@
+# Contrato del gateway universal de Capsule (paquete G1). Fuente de verdad de las rutas del plano de control del gateway.
+# Modelo de datos: backend/internal/repository/migrations/000060-000062; persistencia: backend/internal/gateway/store.
+# `x-status: new` = aun sin handler (lo implementa G3); la forma exacta ya es contrato.
+openapi: 3.1.0
+info:
+  title: Capsule Gateway API
+  version: 0.1.0
+  description: |
+    Rutas del gateway universal. Principios:
+    - El acceso `gateway` es el PRIMARIO; `direct_port` (puertos 40000-41999 actuales) es SECUNDARIO. Ambos comparten
+      autorizacion (roles de `internal/authz`, lista de IP unica) y auditoria.
+    - El servicio es el NOMBRE del puerto configurado: unico por proyecto, formato etiqueta DNS (`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, 1-63).
+    - "No existe" y "no autorizado" son indistinguibles hacia el cliente (misma respuesta y latencia).
+    - Los endpoints `/internal/gateway/*` los llama solo el plano de datos con el secreto compartido
+      (cabecera `X-Gateway-Secret`, variable CAPSULE_GATEWAY_SECRET); nunca se exponen por el ALB.
+  license:
+    name: Interna
+servers:
+- url: https://api.tumi-ai.com/api/v1
+  description: Produccion (rutas publicas)
+- url: http://localhost:8080
+  description: Local (incluye /internal)
+tags:
+- name: Interno
+- name: Conexion
+- name: Servicios
+- name: Puertos
+- name: Politica
+paths:
+  /internal/gateway/routes:
+    get:
+      tags: [Interno]
+      operationId: gatewayInternalRoutes
+      summary: Tabla de rutas del plano de datos (long-poll por revision)
+      description: |
+        Devuelve la tabla completa de rutas habilitadas (solo servicios con acceso `gateway` habilitado) y los
+        arrendamientos de puerto aleatorio activos. Si `since` es igual a la revision actual espera hasta `wait`
+        segundos y responde `304`. El gateway reemplaza su tabla de forma atomica y, si el control cae, sigue con la ultima (fail-static).
+      x-status: new
+      x-permission: gateway.internal
+      security: [{gatewaySecret: []}]
+      parameters:
+      - {name: since, in: query, required: false, schema: {type: integer, format: int64, minimum: 0}, description: Revision que el gateway ya tiene.}
+      - {name: wait, in: query, required: false, schema: {type: integer, minimum: 0, maximum: 60, default: 25}}
+      responses:
+        '200':
+          description: Tabla completa en la revision indicada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RouteSnapshot'}
+        '304': {description: Sin cambios desde `since`.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /internal/gateway/authorize:
+    post:
+      tags: [Interno]
+      operationId: gatewayInternalAuthorize
+      summary: Autoriza una conexion entrante
+      description: |
+        El gateway pregunta si `principal` puede conectar a la ruta desde `src_ip`. Aplica rol (`project:connect`), lista de IP
+        unica del proyecto y limites. Un token no cacheado falla cerrado. `deny_reason` es solo para auditoria interna: hacia el
+        cliente final "servicio inexistente" y "no autorizado" son la misma respuesta (status 2 de CAP1 / cierre silencioso en SNI).
+      x-status: new
+      x-permission: gateway.internal
+      security: [{gatewaySecret: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AuthorizeRequest'}
+      responses:
+        '200':
+          description: Decision.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthorizeResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /projects/{projectID}/gateway/services:
+    get:
+      tags: [Servicios]
+      operationId: gatewayServiceList
+      summary: Servicios del proyecto con sus accesos
+      x-status: new
+      x-permission: project:read
+      parameters: [{$ref: '#/components/parameters/ProjectID'}]
+      responses:
+        '200':
+          description: Servicios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services: {type: array, items: {$ref: '#/components/schemas/Service'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      tags: [Servicios]
+      operationId: gatewayServiceCreate
+      summary: Expone un servicio (crea ruta y acceso gateway)
+      x-status: new
+      x-permission: project:admin
+      parameters: [{$ref: '#/components/parameters/ProjectID'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceCreate'}
+      responses:
+        '201':
+          description: Servicio creado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Service'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409':
+          description: Nombre ya usado en el proyecto (`service_name_taken`).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /projects/{projectID}/gateway/services/{service}:
+    patch:
+      tags: [Servicios]
+      operationId: gatewayServiceUpdate
+      summary: Cambia accesos habilitados, acceso por defecto o modo de la ruta
+      x-status: new
+      x-permission: project:admin
+      parameters:
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: '#/components/parameters/ServiceName'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceUpdate'}
+      responses:
+        '200':
+          description: Servicio actualizado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Service'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [Servicios]
+      operationId: gatewayServiceDelete
+      summary: Cierra el servicio; su puerto aleatorio pasa a cuarentena
+      x-status: new
+      x-permission: project:admin
+      parameters:
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: '#/components/parameters/ServiceName'}
+      responses:
+        '204': {description: Eliminado.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /projects/{projectID}/gateway/services/{service}/connection-info:
+    get:
+      tags: [Conexion]
+      operationId: gatewayConnectionInfo
+      summary: Cadenas de conexion por acceso (la del gateway SIEMPRE primero)
+      description: |
+        `connection_strings[0]` es el acceso `gateway` cuando esta habilitado; el `direct_port` sigue despues con su `warning`.
+        Migracion de contrato en dos pasos: el campo antiguo `connection_string` de las respuestas existentes de bases/puertos
+        conserva la cadena directa mientras no se cambie su valor.
+      x-status: new
+      x-permission: project:read
+      parameters:
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: '#/components/parameters/ServiceName'}
+      responses:
+        '200':
+          description: Informacion de conexion.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConnectionInfo'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /projects/{projectID}/gateway/services/{service}/connection-token:
+    post:
+      tags: [Conexion]
+      operationId: gatewayConnectionToken
+      summary: Emite un token de conexion `cgc_` de vida corta (maximo 5 minutos)
+      x-status: new
+      x-permission: project:connect
+      parameters:
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: '#/components/parameters/ServiceName'}
+      responses:
+        '200':
+          description: Token (se muestra una sola vez).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_at]
+                properties:
+                  token: {type: string, description: 'Prefijo `cgc_`.'}
+                  expires_at: {type: string, format: date-time}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /projects/{projectID}/gateway/services/{service}/port:
+    post:
+      tags: [Puertos]
+      operationId: gatewayPortLease
+      summary: Arrienda un puerto aleatorio de respaldo (idempotente por servicio)
+      description: Si ya hay un arrendamiento activo lo devuelve tal cual. Aplica cuotas por proyecto y por organizacion.
+      x-status: new
+      x-permission: project:admin
+      parameters:
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: '#/components/parameters/ServiceName'}
+      responses:
+        '200':
+          description: Arrendamiento activo.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortLease'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: |
+            `port_pool_exhausted` (el pool no tiene puertos libres; el hint apunta a `capsule://`) o
+            `port_quota_exceeded` (cuota del proyecto o de la organizacion).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              examples:
+                exhausted:
+                  value:
+                    error: {code: port_pool_exhausted, message: No hay puertos aleatorios libres en este momento., hint: 'Use capsule://<proyecto>/<servicio> (no necesita puerto) o libere un acceso.'}
+                quota:
+                  value:
+                    error: {code: port_quota_exceeded, message: Cuota de puertos aleatorios alcanzada., hint: Libere un acceso o pida mas cuota., details: {scope: project, limit: 5}}
+    delete:
+      tags: [Puertos]
+      operationId: gatewayPortRelease
+      summary: Libera el puerto aleatorio (24 h de cuarentena antes de reutilizarse)
+      x-status: new
+      x-permission: project:admin
+      parameters:
+      - {$ref: '#/components/parameters/ProjectID'}
+      - {$ref: '#/components/parameters/ServiceName'}
+      responses:
+        '204': {description: Liberado.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /orgs/{orgID}/gateway/policy:
+    get:
+      tags: [Politica]
+      operationId: gatewayPolicyGet
+      summary: Politica de la organizacion para conexiones que no pasan por el gateway
+      x-status: new
+      x-permission: org:read
+      parameters: [{$ref: '#/components/parameters/OrgID'}]
+      responses:
+        '200':
+          description: Politica y cuotas.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrgGatewayPolicy'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    put:
+      tags: [Politica]
+      operationId: gatewayPolicySet
+      summary: Cambia `gateway_policy` (warn | error)
+      description: Las clases `metadata` y `other-capsule` del informe de despliegue son error siempre, con cualquier politica.
+      x-status: new
+      x-permission: org:admin
+      parameters: [{$ref: '#/components/parameters/OrgID'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gateway_policy]
+              properties:
+                gateway_policy: {type: string, enum: [warn, error]}
+      responses:
+        '200':
+          description: Politica actualizada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrgGatewayPolicy'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+    gatewaySecret: {type: apiKey, in: header, name: X-Gateway-Secret}
+  parameters:
+    ProjectID: {name: projectID, in: path, required: true, schema: {type: string, format: uuid}}
+    OrgID: {name: orgID, in: path, required: true, schema: {type: string, format: uuid}}
+    ServiceName:
+      name: service
+      in: path
+      required: true
+      description: Nombre del puerto configurado (etiqueta DNS).
+      schema: {$ref: '#/components/schemas/ServiceName'}
+  responses:
+    BadRequest:
+      description: Solicitud invalida (`invalid_request`).
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Unauthorized:
+      description: Sin credenciales validas.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Forbidden:
+      description: Sin permiso.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    NotFound:
+      description: No existe (o sin permiso para saberlo).
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    TooManyRequests:
+      description: Limite de tasa (`rate_limited`); cabecera `Retry-After`.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [invalid_request, unauthorized, forbidden, not_found, service_name_taken, port_pool_exhausted, port_quota_exceeded, rate_limited, host_in_use, internal]
+            message: {type: string}
+            hint: {type: string}
+            details: {type: object, additionalProperties: true}
+    ServiceName:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+    Protocol:
+      type: string
+      enum: [http, tls, postgres, mysql, redis, mongo, ssh, tcp, udp]
+    AccessKind:
+      type: string
+      enum: [gateway, direct_port]
+    Access:
+      type: object
+      required: [kind, enabled]
+      properties:
+        kind: {$ref: '#/components/schemas/AccessKind'}
+        enabled: {type: boolean}
+        port: {type: [integer, 'null'], description: 'direct_port: puerto publicado del host.'}
+    Service:
+      type: object
+      required: [id, name, protocol, default_access, accesses]
+      properties:
+        id: {type: string, format: uuid}
+        name: {$ref: '#/components/schemas/ServiceName'}
+        protocol: {$ref: '#/components/schemas/Protocol'}
+        container_port: {type: integer}
+        default_access: {$ref: '#/components/schemas/AccessKind'}
+        accesses:
+          type: array
+          maxItems: 2
+          items: {$ref: '#/components/schemas/Access'}
+        created_at: {type: string, format: date-time}
+    ServiceCreate:
+      type: object
+      required: [name, container_port]
+      properties:
+        name: {$ref: '#/components/schemas/ServiceName'}
+        protocol: {$ref: '#/components/schemas/Protocol'}
+        container_port: {type: integer, minimum: 1, maximum: 65535}
+        mode: {type: string, enum: [passthrough, terminate], default: passthrough}
+        default_access: {$ref: '#/components/schemas/AccessKind'}
+    ServiceUpdate:
+      type: object
+      properties:
+        gateway_enabled: {type: boolean}
+        direct_port_enabled: {type: boolean}
+        default_access: {$ref: '#/components/schemas/AccessKind'}
+        mode: {type: string, enum: [passthrough, terminate]}
+    ConnectionString:
+      type: object
+      required: [access, kind, value]
+      properties:
+        access: {$ref: '#/components/schemas/AccessKind'}
+        kind:
+          type: string
+          enum: [sni_name, capsule_uri, random_port, direct_port]
+          description: Forma concreta dentro del acceso (por nombre, URI `capsule://`, puerto aleatorio de respaldo, puerto directo).
+        value: {type: string, description: Cadena de conexion sin contrasena.}
+        host: {type: string}
+        port: {type: integer}
+        command: {type: string, description: 'Comando listo, p. ej. `capsule connect proyecto/servicio`.'}
+        recommended: {type: boolean}
+        warning: {type: string, description: 'Obligatorio en direct_port: puerto no estandar, requiere IP permitida, certificado autofirmado.'}
+    ConnectionInfo:
+      type: object
+      required: [service, connection_strings]
+      properties:
+        service: {$ref: '#/components/schemas/ServiceName'}
+        protocol: {$ref: '#/components/schemas/Protocol'}
+        connection_strings:
+          type: array
+          minItems: 1
+          description: El primer elemento es SIEMPRE del acceso `gateway` cuando esta habilitado.
+          items: {$ref: '#/components/schemas/ConnectionString'}
+        connection_string:
+          type: string
+          deprecated: true
+          description: Campo antiguo; conserva la cadena directa durante la migracion de contrato.
+    PortLease:
+      type: object
+      required: [port, host, state]
+      properties:
+        port: {type: integer}
+        host: {type: string, description: 'Hostname `*.apps` del servicio.'}
+        state: {type: string, enum: [active]}
+        leased_at: {type: string, format: date-time}
+        last_conn_at: {type: [string, 'null'], format: date-time}
+        planned_release_at: {type: [string, 'null'], format: date-time, description: 'Liberacion prevista por inactividad.'}
+    Route:
+      type: object
+      required: [id, service_id, host, transport, protocol, dest_host, dest_port, mode, project_id, org_id, service]
+      properties:
+        id: {type: string, format: uuid}
+        service_id: {type: string, format: uuid}
+        project_id: {type: [string, 'null'], format: uuid}
+        org_id: {type: string, format: uuid}
+        service: {$ref: '#/components/schemas/ServiceName'}
+        host: {type: string, description: 'Host/SNI en minusculas.'}
+        transport: {type: string, enum: [tcp, udp]}
+        protocol: {$ref: '#/components/schemas/Protocol'}
+        dest_host: {type: string, description: 'Destino interno en capsule-net; nunca lo elige el cliente.'}
+        dest_port: {type: integer}
+        mode: {type: string, enum: [passthrough, terminate]}
+        rev: {type: integer, format: int64}
+    LeaseView:
+      type: object
+      required: [port, service_id, org_id]
+      properties:
+        port: {type: integer}
+        service_id: {type: string, format: uuid}
+        project_id: {type: [string, 'null'], format: uuid}
+        org_id: {type: string, format: uuid}
+    RouteSnapshot:
+      type: object
+      required: [rev, routes, leases]
+      properties:
+        rev: {type: integer, format: int64}
+        routes: {type: array, items: {$ref: '#/components/schemas/Route'}}
+        leases: {type: array, items: {$ref: '#/components/schemas/LeaseView'}}
+    AuthorizeRequest:
+      type: object
+      required: [route_id, src_ip, credential_type]
+      properties:
+        route_id: {type: string, format: uuid}
+        src_ip: {type: string, description: 'IPv4 o IPv6 canonica (`::ffff:a.b.c.d` normalizada a IPv4).'}
+        credential_type: {type: string, enum: [cap, cgt, cgc, none]}
+        credential: {type: string, description: 'Token tal cual; nunca se registra, solo su id/jti.'}
+        access: {type: string, enum: [sni_name, capsule_uri, random_port]}
+    AuthorizeResponse:
+      type: object
+      required: [allow]
+      properties:
+        allow: {type: boolean}
+        principal_id: {type: string}
+        deny_reason: {type: string, enum: [unauthorized, ip_denied, quota, unavailable], description: 'Solo auditoria interna.'}
+        max_conns: {type: integer}
+        max_conns_per_ip: {type: integer}
+        idle_timeout_seconds: {type: integer}
+        cache_ttl_seconds: {type: integer, maximum: 30}
+    OrgGatewayPolicy:
+      type: object
+      required: [gateway_policy]
+      properties:
+        gateway_policy: {type: string, enum: [warn, error]}
+        max_random_ports: {type: integer}
+        max_random_ports_per_project: {type: integer}

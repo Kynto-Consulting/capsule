@@ -1,0 +1,86 @@
+# Servicio del gateway universal de Capsule (docs/gateway/PLAN.md). PLANTILLA: NO está incluida en docker-compose.prod.yml.
+#
+# Se superpone al compose de producción y solo arranca si se pide el perfil `gateway` (un `docker compose up -d` normal NO lo
+# levanta):
+#
+#   cd /opt/capsule
+#   docker compose -f docker-compose.prod.yml -f deploy/gateway/docker-compose.gateway.yml --profile gateway config -q   # valida
+#   docker compose -f docker-compose.prod.yml -f deploy/gateway/docker-compose.gateway.yml --profile gateway up -d capsule-gateway
+#
+# Reversa (no toca nada más): deploy/gateway/rollback.sh   (o: docker compose ... --profile gateway rm -sf capsule-gateway)
+#
+# Decisiones de diseño (por qué así):
+#  * network_mode: host. (1) El pool 20000-29999 son hasta 10 000 puertos que el gateway abre y cierra en caliente: `ports:` de
+#    Docker no sirve (un docker-proxy por puerto). (2) La lista de IP por proyecto se evalúa en el gateway y exige la IP REAL del
+#    cliente; con el docker-proxy de IPv6 (sin ip6tables) la IP de origen se pierde. En modo host `RemoteAddr` es la IP del cliente,
+#    IPv4 e IPv6, y el listener `[::]` es de doble pila (PLAN.md sección 7, recomendación de Docker).
+#    Consecuencia: el gateway llega a los contenedores de proyecto por su IP del puente (el host enruta a los puentes Docker); el
+#    plano de control debe entregar `dest_host` como IP, no como nombre de contenedor (a confirmar en G4/G10).
+#  * No es root: usuario 10001 + capability NET_BIND_SERVICE (solo hace falta con CAPSULE_GW_TAKE_443=1; el binario de la imagen
+#    lleva `setcap cap_net_bind_service=+ep`, porque Docker no da capabilities ambientales a usuarios no root).
+#  * Memoria: tope duro del contenedor y GOMEMLIMIT por debajo, para que el GC trabaje más antes de que el kernel mate el proceso.
+#    Cifras y razonamiento: docs/gateway/RESOURCES.md.
+#  * Descriptores: 6 por conexión en passthrough (ver RESOURCES.md, sección "los 6 descriptores"), de ahí el nofile.
+#
+# Variables de compose (se leen del entorno o de /opt/capsule/.env):
+#   CAPSULE_GATEWAY_IMAGE   imagen del gateway (ECR), obligatoria: no hay valor por defecto a propósito (sin `latest` implícito).
+#   CAPSULE_GW_MEM          tope de memoria del contenedor (defecto 384m en F1; 512m cuando ya se midió en el host real).
+#   CAPSULE_GW_GOMEMLIMIT   límite blando del runtime de Go (defecto 300MiB; ~78 % del tope).
+#   CAPSULE_GW_NOFILE       límite de descriptores (defecto 131072).
+# Las variables CAPSULE_GW_* del propio gateway están en deploy/gateway/gateway.env.example (copiar a gateway.env, modo 0600).
+
+services:
+  capsule-gateway:
+    profiles: ["gateway"]
+    image: ${CAPSULE_GATEWAY_IMAGE:?set CAPSULE_GATEWAY_IMAGE (p. ej. 598806201852.dkr.ecr.us-east-1.amazonaws.com/capsule/gateway:<etiqueta-fija>)}
+    container_name: capsule-gateway
+    restart: always
+    network_mode: host
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    env_file:
+      - ./deploy/gateway/gateway.env
+    environment:
+      # Límite blando de memoria del runtime de Go: por debajo de mem_limit.
+      - GOMEMLIMIT=${CAPSULE_GW_GOMEMLIMIT:-300MiB}
+    volumes:
+      # Certificados comodín (G9/G10): solo lectura. Dueño 10001, modo 0600 la clave. El gateway recarga al cambiar el archivo.
+      - /opt/capsule/gateway/certs:/certs:ro
+    # --- recursos -----------------------------------------------------------------------------------------------------------
+    mem_limit: ${CAPSULE_GW_MEM:-384m}
+    memswap_limit: ${CAPSULE_GW_MEM:-384m}     # igual a mem_limit: sin swap (si el host no tiene swap no cambia nada)
+    mem_reservation: 128m
+    pids_limit: 1024                           # el prototipo medido usó 25 hilos con 4000 conexiones
+    cpus: 1.0                                  # t3.medium: 2 vCPU con créditos (ver RESOURCES.md); el gateway no debe agotarlos
+    oom_score_adj: 300                         # si el HOST se queda sin RAM, el gateway muere antes que Forgejo/Postgres/backend
+    ulimits:
+      nofile:
+        soft: ${CAPSULE_GW_NOFILE:-131072}
+        hard: ${CAPSULE_GW_NOFILE:-131072}
+    # --- salud --------------------------------------------------------------------------------------------------------------
+    # Requiere que el binario incluya el subcomando `healthcheck` (consulta /readyz en CAPSULE_GW_HEALTH_ADDR). La imagen del
+    # gateway no lleva shell ni curl (read_only, sin paquetes), por eso el chequeo es del propio binario. Si G4 no lo implementa,
+    # cambiar por: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9103/readyz >/dev/null"] con una imagen que traiga wget.
+    healthcheck:
+      test: ["CMD", "/capsule-gateway", "healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    # Parada con drenado: el gateway deja de aceptar y espera a que cierren las conexiones largas (SSH, bases) hasta este plazo.
+    # Para actualizar el binario sin cortar sesiones usar el procedimiento de PLAN.md sección 9 (dos instancias), no `docker restart`.
+    stop_grace_period: 30m
+    stop_signal: SIGTERM
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

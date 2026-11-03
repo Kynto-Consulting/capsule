@@ -1,0 +1,914 @@
+{
+ "spec": "PROTOCOL.md sec. 5",
+ "vectors": [
+  {
+   "name": "valid_minimal",
+   "desc": "tcp, cap_, sin TLV",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 74,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_cgt",
+   "desc": "token cgt_",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646202002f6367745f42424242424242424242424242424242424242424242424242424242424242424242424242424242424242",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 74,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 2,
+     "auth": "cgt_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_cgc",
+   "desc": "token cgc_ (JWT compacto)",
+   "hex": "4341503101000037010b6d692d70726f796563746f02646203001c6367635f614756685a4756792e63474635624739685a412e63326c6e",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 55,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 3,
+     "auth": "cgc_aGVhZGVy.cGF5bG9hZA.c2ln",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_cgs",
+   "desc": "token de servicio cgs_",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646204002f6367735f43434343434343434343434343434343434343434343434343434343434343434343434343434343434343",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 74,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 4,
+     "auth": "cgs_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_udp_stream_flag_proxy",
+   "desc": "transport 2 (UDP sobre flujo), bit0 de banderas",
+   "hex": "4341503101010059020b6d692d70726f796563746f116d696e6563726166742d626564726f636b01002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 89,
+    "fields": {
+     "transport": 2,
+     "flags": 1,
+     "project": "mi-proyecto",
+     "service": "minecraft-bedrock",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_transport_quic_syntax",
+   "desc": "transport 3 es sintacticamente valido (la politica del servidor puede rechazarlo)",
+   "hex": "434150310100004a030b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 74,
+    "fields": {
+     "transport": 3,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_nonce_clientid",
+   "desc": "TLV 0x01 y 0x02",
+   "hex": "434150310100006e010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141410110000102030405060708090a0b0c0d0e0f021063617073756c652d676f2f302e312e30",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 110,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0,
+     "nonce_hex": "000102030405060708090a0b0c0d0e0f",
+     "client_id": "capsule-go/0.1.0"
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_padding",
+   "desc": "relleno 0x80 (no canonico: solo decodificacion)",
+   "hex": "4341503101000056010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141800a00000000000000000000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 86,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 1
+    }
+   }
+  },
+  {
+   "name": "valid_unknown_ignorable_tlv",
+   "desc": "TLV >=0x80 desconocidos se ignoran",
+   "hex": "4341503101000054010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141900378797a8000ff0101",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 84,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 3
+    }
+   }
+  },
+  {
+   "name": "valid_one_char_names",
+   "desc": "nombres de 1 caracter",
+   "hex": "434150310100003f010161016201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 63,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "a",
+     "service": "b",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "limit_names_63",
+   "desc": "nombres de 63 caracteres",
+   "hex": "43415031010000bb013f6162626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262633f61626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626301002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 187,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc",
+     "service": "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "limit_auth_512",
+   "desc": "token de 512 bytes",
+   "hex": "434150310100021b010b6d692d70726f796563746f0264620102006361705f5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 539,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "limit_auth_8",
+   "desc": "token minimo (8)",
+   "hex": "4341503101000023010b6d692d70726f796563746f0264620100086361705f31323334",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 35,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_1234",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "valid_token_charset",
+   "desc": "caracteres . - _ permitidos",
+   "hex": "4341503101000026010b6d692d70726f796563746f02646201000b6361705f612e622d635f64",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 38,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_a.b-c_d",
+     "ignored_tlvs": 0
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "limit_hdr_1024",
+   "desc": "encabezado de exactamente 1024 B",
+   "hex": "4341503101000400010b6d692d70726f796563746f0264620102006361705f5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a80ff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080e200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 1024,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+     "ignored_tlvs": 2
+    }
+   }
+  },
+  {
+   "name": "valid_trailing_payload",
+   "desc": "bytes de datos tras el encabezado (envio optimista): no se consumen",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141415353482d322e302d4f70656e5353485f31302e320d0a",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 74,
+    "fields": {
+     "transport": 1,
+     "flags": 0,
+     "project": "mi-proyecto",
+     "service": "db",
+     "auth_type": 1,
+     "auth": "cap_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "ignored_tlvs": 0
+    }
+   }
+  },
+  {
+   "name": "bad_magic",
+   "desc": "magic distinto",
+   "hex": "434150320100004a010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0102"
+   }
+  },
+  {
+   "name": "bad_magic_http",
+   "desc": "trafico HTTP",
+   "hex": "474554202f20485454502f312e310d0a0d0a",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0102"
+   }
+  },
+  {
+   "name": "unknown_version_2",
+   "desc": "version 2",
+   "hex": "434150310200004a010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0101"
+   }
+  },
+  {
+   "name": "unknown_version_0",
+   "desc": "version 0",
+   "hex": "434150310000004a010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0101"
+   }
+  },
+  {
+   "name": "unknown_version_255_garbage",
+   "desc": "version 255 con cuerpo arbitrario",
+   "hex": "43415031ff000020aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0101"
+   }
+  },
+  {
+   "name": "hdr_len_too_small",
+   "desc": "hdr_len 16",
+   "hex": "4341503101000010010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0103"
+   }
+  },
+  {
+   "name": "hdr_len_too_large",
+   "desc": "hdr_len 1025",
+   "hex": "4341503101000401010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0103"
+   }
+  },
+  {
+   "name": "hdr_len_zero",
+   "desc": "hdr_len 0",
+   "hex": "4341503101000000010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0103"
+   }
+  },
+  {
+   "name": "hdr_len_short_of_fields",
+   "desc": "hdr_len menor que los campos reales",
+   "hex": "4341503101000014010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010B"
+   }
+  },
+  {
+   "name": "hdr_len_beyond_data",
+   "desc": "hdr_len mayor que los datos y fin de flujo",
+   "hex": "43415031010000c8010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "flags_reserved_bit1",
+   "desc": "bit1 activo",
+   "hex": "434150310102004a010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0104"
+   }
+  },
+  {
+   "name": "flags_reserved_bit7",
+   "desc": "bit7 activo",
+   "hex": "434150310181004a010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0104"
+   }
+  },
+  {
+   "name": "transport_0",
+   "desc": "transport 0",
+   "hex": "434150310100004a000b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0109"
+   }
+  },
+  {
+   "name": "transport_4",
+   "desc": "transport 4",
+   "hex": "434150310100004a040b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0109"
+   }
+  },
+  {
+   "name": "proj_len_0",
+   "desc": "proj_len 0",
+   "hex": "434150310100003f010002646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_len_64",
+   "desc": "proyecto de 64",
+   "hex": "434150310100007f01406161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616102646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_uppercase",
+   "desc": "mayusculas",
+   "hex": "434150310100004a010b4d692d50726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_leading_hyphen",
+   "desc": "guion inicial",
+   "hex": "434150310100004301042d61626302646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_trailing_hyphen",
+   "desc": "guion final",
+   "hex": "434150310100004301046162632d02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_underscore",
+   "desc": "guion bajo",
+   "hex": "4341503101000043010461625f6302646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_nonascii",
+   "desc": "byte no ASCII",
+   "hex": "434150310100004301046162c3a902646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "svc_len_0",
+   "desc": "svc_len 0",
+   "hex": "4341503101000048010b6d692d70726f796563746f0001002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "svc_dot",
+   "desc": "punto en el servicio",
+   "hex": "434150310100004b010b6d692d70726f796563746f03612e6201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0105"
+   }
+  },
+  {
+   "name": "proj_len_overrun",
+   "desc": "proj_len mayor que el encabezado",
+   "hex": "4341503101000041013f616202646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010B"
+   }
+  },
+  {
+   "name": "auth_type_0",
+   "desc": "auth_type 0",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646200002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_type_5",
+   "desc": "auth_type 5",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646205002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_prefix_mismatch",
+   "desc": "auth_type 2 con prefijo cap_",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646202002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_len_0",
+   "desc": "auth_len 0",
+   "hex": "434150310100001b010b6d692d70726f796563746f026462010000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_len_7",
+   "desc": "token de 7 B",
+   "hex": "4341503101000022010b6d692d70726f796563746f0264620100076361705f313233",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_len_513",
+   "desc": "token de 513 B",
+   "hex": "434150310100021c010b6d692d70726f796563746f0264620102016361705f5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_bad_charset",
+   "desc": "espacio en el token",
+   "hex": "4341503101000026010b6d692d70726f796563746f02646201000b6361705f61626320646566",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0106"
+   }
+  },
+  {
+   "name": "auth_len_overrun",
+   "desc": "auth_len mayor que lo que queda",
+   "hex": "434150310100004a010b6d692d70726f796563746f02646201012c6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010B"
+   }
+  },
+  {
+   "name": "tlv_truncated_header",
+   "desc": "TLV con un solo byte",
+   "hex": "434150310100004b010b6d692d70726f796563746f02646201002f6361705f4141414141414141414141414141414141414141414141414141414141414141414141414141414141414180",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0107"
+   }
+  },
+  {
+   "name": "tlv_len_overrun",
+   "desc": "TLV con longitud que excede el encabezado",
+   "hex": "434150310100004d010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141800500",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0107"
+   }
+  },
+  {
+   "name": "tlv_nonce_wrong_len",
+   "desc": "nonce de 8 B",
+   "hex": "4341503101000054010b6d692d70726f796563746f02646201002f6361705f4141414141414141414141414141414141414141414141414141414141414141414141414141414141414101080000000000000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0107"
+   }
+  },
+  {
+   "name": "tlv_nonce_duplicate",
+   "desc": "nonce repetido",
+   "hex": "434150310100006e010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141011000000000000000000000000000000000011000000000000000000000000000000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0107"
+   }
+  },
+  {
+   "name": "tlv_clientid_bad_charset",
+   "desc": "id de cliente con espacio",
+   "hex": "434150310100004f010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141410203612062",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0107"
+   }
+  },
+  {
+   "name": "tlv_clientid_empty",
+   "desc": "id de cliente vacio",
+   "hex": "434150310100004c010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141410200",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0107"
+   }
+  },
+  {
+   "name": "tlv_unknown_critical",
+   "desc": "tipo 0x03 desconocido (<0x80)",
+   "hex": "434150310100004d010b6d692d70726f796563746f02646201002f6361705f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141030178",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0108"
+   }
+  },
+  {
+   "name": "tlv_unknown_critical_0",
+   "desc": "tipo 0x00",
+   "hex": "434150310100004c010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141410000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x0108"
+   }
+  },
+  {
+   "name": "truncated_0_stream_open",
+   "desc": "prefijo de 0 B, el flujo sigue abierto: faltan datos",
+   "hex": "",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_0_eof",
+   "desc": "prefijo de 0 B y fin de flujo",
+   "hex": "",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "truncated_3_stream_open",
+   "desc": "prefijo de 3 B, el flujo sigue abierto: faltan datos",
+   "hex": "434150",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_3_eof",
+   "desc": "prefijo de 3 B y fin de flujo",
+   "hex": "434150",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "truncated_7_stream_open",
+   "desc": "prefijo de 7 B, el flujo sigue abierto: faltan datos",
+   "hex": "43415031010000",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_7_eof",
+   "desc": "prefijo de 7 B y fin de flujo",
+   "hex": "43415031010000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "truncated_8_stream_open",
+   "desc": "prefijo de 8 B, el flujo sigue abierto: faltan datos",
+   "hex": "434150310100005c",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_8_eof",
+   "desc": "prefijo de 8 B y fin de flujo",
+   "hex": "434150310100005c",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "truncated_9_stream_open",
+   "desc": "prefijo de 9 B, el flujo sigue abierto: faltan datos",
+   "hex": "434150310100005c01",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_9_eof",
+   "desc": "prefijo de 9 B y fin de flujo",
+   "hex": "434150310100005c01",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "truncated_17_stream_open",
+   "desc": "prefijo de 17 B, el flujo sigue abierto: faltan datos",
+   "hex": "434150310100005c010b6d692d70726f79",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_17_eof",
+   "desc": "prefijo de 17 B y fin de flujo",
+   "hex": "434150310100005c010b6d692d70726f79",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "truncated_91_stream_open",
+   "desc": "prefijo de 91 B, el flujo sigue abierto: faltan datos",
+   "hex": "434150310100005c010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141410110000102030405060708090a0b0c0d0e",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_91_eof",
+   "desc": "prefijo de 91 B y fin de flujo",
+   "hex": "434150310100005c010b6d692d70726f796563746f02646201002f6361705f414141414141414141414141414141414141414141414141414141414141414141414141414141414141410110000102030405060708090a0b0c0d0e",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  },
+  {
+   "name": "empty_eof",
+   "desc": "sin bytes y fin de flujo",
+   "hex": "",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "status": 1,
+    "code": "0x010A"
+   }
+  }
+ ]
+}

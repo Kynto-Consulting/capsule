@@ -1,0 +1,610 @@
+{
+ "spec": "PROTOCOL.md sec. 2",
+ "vectors": [
+  {
+   "name": "basic",
+   "uri": "capsule://mi-proyecto/db",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "mi-proyecto",
+     "service": "db",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "tcp.apps.tumi-ai.com",
+     "connect_port": 443,
+     "sni": "tcp.apps.tumi-ai.com"
+    }
+   }
+  },
+  {
+   "name": "scheme_case_insensitive",
+   "uri": "CAPSULE://mi-proyecto/db",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "mi-proyecto",
+     "service": "db",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "tcp.apps.tumi-ai.com",
+     "connect_port": 443,
+     "sni": "tcp.apps.tumi-ai.com"
+    }
+   }
+  },
+  {
+   "name": "one_char",
+   "uri": "capsule://a/b",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "a",
+     "service": "b",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "tcp.apps.tumi-ai.com",
+     "connect_port": 443,
+     "sni": "tcp.apps.tumi-ai.com"
+    }
+   }
+  },
+  {
+   "name": "udp",
+   "uri": "capsule://mi-proyecto/minecraft?transport=udp",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "mi-proyecto",
+     "service": "minecraft",
+     "transport": "udp",
+     "family": "any",
+     "connect_host": "udp.apps.tumi-ai.com",
+     "connect_port": 443,
+     "sni": "udp.apps.tumi-ai.com"
+    }
+   }
+  },
+  {
+   "name": "family6",
+   "uri": "capsule://p/s?family=6",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "6",
+     "connect_host": "tcp.apps.tumi-ai.com",
+     "connect_port": 443,
+     "sni": "tcp.apps.tumi-ai.com"
+    }
+   }
+  },
+  {
+   "name": "zone_override",
+   "uri": "capsule://p/s?zone=apps.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "tcp.apps.example.test",
+     "connect_port": 443,
+     "sni": "tcp.apps.example.test"
+    }
+   }
+  },
+  {
+   "name": "zone_udp",
+   "uri": "capsule://p/s?zone=apps.example.test&transport=udp",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "udp",
+     "family": "any",
+     "connect_host": "udp.apps.example.test",
+     "connect_port": 443,
+     "sni": "udp.apps.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_dns_port",
+   "uri": "capsule://p/s?gateway=gw.example.test:8443",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "gw.example.test",
+     "connect_port": 8443,
+     "sni": "gw.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_dns",
+   "uri": "capsule://p/s?gateway=gw.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "gw.example.test",
+     "connect_port": 443,
+     "sni": "gw.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_ipv6_encoded",
+   "uri": "capsule://p/s?gateway=%5B2001:db8::1%5D:8443&sni=tcp.apps.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "2001:db8::1",
+     "connect_port": 8443,
+     "sni": "tcp.apps.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_ipv6_raw",
+   "uri": "capsule://p/s?gateway=[2001:db8::1]&sni=tcp.apps.example.test&family=6",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "6",
+     "connect_host": "2001:db8::1",
+     "connect_port": 443,
+     "sni": "tcp.apps.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_ipv6_canonicalized",
+   "uri": "capsule://p/s?gateway=[2001:0DB8:0:0:0:0:0:1]&sni=a.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "2001:db8::1",
+     "connect_port": 443,
+     "sni": "a.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_ipv4_literal",
+   "uri": "capsule://p/s?gateway=192.0.2.7:9000&sni=a.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "192.0.2.7",
+     "connect_port": 9000,
+     "sni": "a.example.test"
+    }
+   }
+  },
+  {
+   "name": "gateway_with_sni",
+   "uri": "capsule://p/s?gateway=gw.example.test&sni=other.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "gw.example.test",
+     "connect_port": 443,
+     "sni": "other.example.test"
+    }
+   }
+  },
+  {
+   "name": "x_param_ignored",
+   "uri": "capsule://p/s?x-trace=1",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "tcp.apps.tumi-ai.com",
+     "connect_port": 443,
+     "sni": "tcp.apps.tumi-ai.com"
+    }
+   }
+  },
+  {
+   "name": "percent_in_value",
+   "uri": "capsule://p/s?zone=%61pps.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": true,
+    "fields": {
+     "project": "p",
+     "service": "s",
+     "transport": "tcp",
+     "family": "any",
+     "connect_host": "tcp.apps.example.test",
+     "connect_port": 443,
+     "sni": "tcp.apps.example.test"
+    }
+   }
+  },
+  {
+   "name": "no_slashes",
+   "uri": "capsule:p/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_scheme"
+   }
+  },
+  {
+   "name": "other_scheme",
+   "uri": "http://p/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_scheme"
+   }
+  },
+  {
+   "name": "no_service",
+   "uri": "capsule://p",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_path"
+   }
+  },
+  {
+   "name": "empty_service",
+   "uri": "capsule://p/",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_service"
+   }
+  },
+  {
+   "name": "trailing_slash",
+   "uri": "capsule://p/s/",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_path"
+   }
+  },
+  {
+   "name": "extra_segment",
+   "uri": "capsule://p/s/extra",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_path"
+   }
+  },
+  {
+   "name": "empty_project",
+   "uri": "capsule:///s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_project"
+   }
+  },
+  {
+   "name": "uppercase_project",
+   "uri": "capsule://Mi-Proyecto/db",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_project"
+   }
+  },
+  {
+   "name": "uppercase_service",
+   "uri": "capsule://p/DB",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_service"
+   }
+  },
+  {
+   "name": "percent_in_project",
+   "uri": "capsule://%70/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_project"
+   }
+  },
+  {
+   "name": "leading_hyphen",
+   "uri": "capsule://-p/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_project"
+   }
+  },
+  {
+   "name": "underscore",
+   "uri": "capsule://p_q/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_project"
+   }
+  },
+  {
+   "name": "project_64",
+   "uri": "capsule://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_project"
+   }
+  },
+  {
+   "name": "userinfo_with_password",
+   "uri": "capsule://u:pw@p/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "userinfo"
+   }
+  },
+  {
+   "name": "userinfo",
+   "uri": "capsule://tok@p/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "userinfo"
+   }
+  },
+  {
+   "name": "port_in_authority",
+   "uri": "capsule://p:443/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "port"
+   }
+  },
+  {
+   "name": "ipv6_literal_as_project",
+   "uri": "capsule://[::1]/s",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "port"
+   }
+  },
+  {
+   "name": "fragment",
+   "uri": "capsule://p/s#frag",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "fragment"
+   }
+  },
+  {
+   "name": "empty_query",
+   "uri": "capsule://p/s?",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "param_without_value",
+   "uri": "capsule://p/s?transport",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "param_empty_value",
+   "uri": "capsule://p/s?transport=",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "transport_quic_not_a_uri_value",
+   "uri": "capsule://p/s?transport=quic",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "dup",
+   "uri": "capsule://p/s?transport=tcp&transport=udp",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "dup_param"
+   }
+  },
+  {
+   "name": "token_in_uri_rejected",
+   "uri": "capsule://p/s?token=abc",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "unknown_param"
+   }
+  },
+  {
+   "name": "family_bad",
+   "uri": "capsule://p/s?family=5",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "zone_and_gateway",
+   "uri": "capsule://p/s?zone=apps.example.test&gateway=gw.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "zone_uppercase",
+   "uri": "capsule://p/s?zone=Apps.Example.Test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "zone_single_label",
+   "uri": "capsule://p/s?zone=localhost",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  },
+  {
+   "name": "ipv6_needs_sni",
+   "uri": "capsule://p/s?gateway=%5B2001:db8::1%5D",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "sni_required"
+   }
+  },
+  {
+   "name": "ipv4_needs_sni",
+   "uri": "capsule://p/s?gateway=192.0.2.7",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "sni_required"
+   }
+  },
+  {
+   "name": "ipv6_without_brackets",
+   "uri": "capsule://p/s?gateway=2001:db8::1&sni=a.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_gateway"
+   }
+  },
+  {
+   "name": "ipv6_zone_id",
+   "uri": "capsule://p/s?gateway=[fe80::1%25eth0]&sni=a.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_gateway"
+   }
+  },
+  {
+   "name": "port_0",
+   "uri": "capsule://p/s?gateway=gw.example.test:0",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_gateway"
+   }
+  },
+  {
+   "name": "port_65536",
+   "uri": "capsule://p/s?gateway=gw.example.test:65536",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_gateway"
+   }
+  },
+  {
+   "name": "bad_ipv4",
+   "uri": "capsule://p/s?gateway=999.1.1.1&sni=a.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_gateway"
+   }
+  },
+  {
+   "name": "bad_escape",
+   "uri": "capsule://p/s?zone=%zz",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_escape"
+   }
+  },
+  {
+   "name": "encoded_space",
+   "uri": "capsule://p/s?zone=a%20b.example.test",
+   "default_zone": "apps.tumi-ai.com",
+   "expect": {
+    "ok": false,
+    "error": "bad_param"
+   }
+  }
+ ]
+}

@@ -1,0 +1,124 @@
+{
+ "spec": "PROTOCOL.md sec. 12",
+ "vectors": [
+  {
+   "name": "v4_inside",
+   "cidrs": [
+    "203.0.113.0/24"
+   ],
+   "ip": "203.0.113.77",
+   "allowed": true
+  },
+  {
+   "name": "v4_outside",
+   "cidrs": [
+    "203.0.113.0/24"
+   ],
+   "ip": "203.0.114.1",
+   "allowed": false
+  },
+  {
+   "name": "v4_host_32",
+   "cidrs": [
+    "198.51.100.9/32"
+   ],
+   "ip": "198.51.100.9",
+   "allowed": true
+  },
+  {
+   "name": "v4_host_32_other",
+   "cidrs": [
+    "198.51.100.9/32"
+   ],
+   "ip": "198.51.100.10",
+   "allowed": false
+  },
+  {
+   "name": "v6_inside_48",
+   "cidrs": [
+    "2001:db8:abcd::/48"
+   ],
+   "ip": "2001:db8:abcd:1::5",
+   "allowed": true
+  },
+  {
+   "name": "v6_outside_48",
+   "cidrs": [
+    "2001:db8:abcd::/48"
+   ],
+   "ip": "2001:db8:abce::1",
+   "allowed": false
+  },
+  {
+   "name": "v6_host_128",
+   "cidrs": [
+    "2001:db8::1/128"
+   ],
+   "ip": "2001:db8::1",
+   "allowed": true
+  },
+  {
+   "name": "v6_canonical_form",
+   "cidrs": [
+    "2001:db8::1/128"
+   ],
+   "ip": "2001:0db8:0000:0000:0000:0000:0000:0001",
+   "allowed": true
+  },
+  {
+   "name": "v4_mapped_matches_v4_rule",
+   "cidrs": [
+    "203.0.113.0/24"
+   ],
+   "ip": "::ffff:203.0.113.5",
+   "allowed": true
+  },
+  {
+   "name": "v4_mapped_does_not_match_v6_rule",
+   "cidrs": [
+    "::ffff:0:0/96"
+   ],
+   "ip": "::ffff:203.0.113.5",
+   "allowed": false
+  },
+  {
+   "name": "v4_client_vs_v6_rule",
+   "cidrs": [
+    "2001:db8::/32"
+   ],
+   "ip": "192.0.2.1",
+   "allowed": false
+  },
+  {
+   "name": "v6_client_vs_v4_rule",
+   "cidrs": [
+    "0.0.0.0/0"
+   ],
+   "ip": "2001:db8::1",
+   "allowed": false
+  },
+  {
+   "name": "any_v6",
+   "cidrs": [
+    "::/0"
+   ],
+   "ip": "2001:db8::1",
+   "allowed": true
+  },
+  {
+   "name": "empty_list_denies",
+   "cidrs": [],
+   "ip": "203.0.113.5",
+   "allowed": false
+  },
+  {
+   "name": "multiple_rules",
+   "cidrs": [
+    "10.0.0.0/8",
+    "2001:db8::/32"
+   ],
+   "ip": "2001:db8:1::1",
+   "allowed": true
+  }
+ ]
+}

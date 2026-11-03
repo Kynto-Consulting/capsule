@@ -1,0 +1,457 @@
+{
+ "spec": "PROTOCOL.md sec. 6",
+ "vectors": [
+  {
+   "name": "ok_minimal",
+   "desc": "status 0",
+   "hex": "4341505201000000026f6b0000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 13,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "ok",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "ok_empty_msg",
+   "desc": "status 0 sin mensaje",
+   "hex": "4341505201000000000000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 11,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "ok_udp_session_ipv4",
+   "desc": "sesion UDP, direccion observada IPv4",
+   "hex": "4341505201000000026f6b001b03081122334455667788040704c000020ac822050205c00602003c",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 40,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "ok",
+     "tlvs": {
+      "session_id_hex": "1122334455667788",
+      "client_addr": {
+       "ip": "192.0.2.10",
+       "port": 51234
+      },
+      "max_datagram": 1472,
+      "idle_timeout": 60
+     }
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "ok_client_addr_ipv6",
+   "desc": "direccion observada IPv6",
+   "hex": "4341505201000000026f6b001504130620010db80000000000000000000000019c40",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 34,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "ok",
+     "tlvs": {
+      "client_addr": {
+       "ip": "2001:db8::1",
+       "port": 40000
+      }
+     }
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "unsupported_version_reply",
+   "desc": "status 1 con max_version",
+   "hex": "434150520101010113756e737570706f727465642076657273696f6e0003010101",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 33,
+    "fields": {
+     "version": 1,
+     "status": 1,
+     "code": 257,
+     "msg": "unsupported version",
+     "tlvs": {
+      "max_version": 1
+     }
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "status2_uniform",
+   "desc": "respuesta uniforme",
+   "hex": "43415052010202010e6e6f7420617574686f72697a65640000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 25,
+    "fields": {
+     "version": 1,
+     "status": 2,
+     "code": 513,
+     "msg": "not authorized",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "status3_ip",
+   "desc": "IP no permitida",
+   "hex": "43415052010303010e6970206e6f7420616c6c6f7765640000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 25,
+    "fields": {
+     "version": 1,
+     "status": 3,
+     "code": 769,
+     "msg": "ip not allowed",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "status5_retry_after",
+   "desc": "cuota con retry_after",
+   "hex": "43415052010505030c72617465206c696d6974656400040202001e",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 27,
+    "fields": {
+     "version": 1,
+     "status": 5,
+     "code": 1283,
+     "msg": "rate limited",
+     "tlvs": {
+      "retry_after": 30
+     }
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "status4",
+   "desc": "destino caido",
+   "hex": "43415052010404011764657374696e6174696f6e20756e617661696c61626c650000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 34,
+    "fields": {
+     "version": 1,
+     "status": 4,
+     "code": 1025,
+     "msg": "destination unavailable",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "status6",
+   "desc": "gateway drenando",
+   "hex": "434150520106060108647261696e696e670000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 19,
+    "fields": {
+     "version": 1,
+     "status": 6,
+     "code": 1537,
+     "msg": "draining",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "unknown_status_decodes",
+   "desc": "un status desconocido se decodifica; el cliente lo trata como error no reintentable",
+   "hex": "43415052010909990d667574757265207374617475730000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 24,
+    "fields": {
+     "version": 1,
+     "status": 9,
+     "code": 2457,
+     "msg": "future status",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "limit_msg_120",
+   "desc": "mensaje de 120",
+   "hex": "4341505201000000787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878780000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 131,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "tlvs": {}
+    }
+   },
+   "canonical": true
+  },
+  {
+   "name": "unknown_ext_ignored",
+   "desc": "TLV de respuesta desconocidos (cualquier tipo) se ignoran",
+   "hex": "4341505201000000026f6b000c90027a7a07027a7a80020000",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 25,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "ok",
+     "tlvs": {}
+    }
+   }
+  },
+  {
+   "name": "ok_with_following_data",
+   "desc": "datos del destino tras la respuesta",
+   "hex": "4341505201000000026f6b00005353482d322e302d780d0a",
+   "eof": true,
+   "expect": {
+    "ok": true,
+    "consumed": 13,
+    "fields": {
+     "version": 1,
+     "status": 0,
+     "code": 0,
+     "msg": "ok",
+     "tlvs": {}
+    }
+   }
+  },
+  {
+   "name": "bad_magic",
+   "desc": "magic invalido",
+   "hex": "4341505801000000000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_magic"
+   }
+  },
+  {
+   "name": "version_0",
+   "desc": "version 0",
+   "hex": "4341505200000000000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_version"
+   }
+  },
+  {
+   "name": "msg_121",
+   "desc": "mensaje de 121",
+   "hex": "434150520100000079787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878780000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "msg_too_long"
+   }
+  },
+  {
+   "name": "msg_control_char",
+   "desc": "caracter de control en el mensaje",
+   "hex": "4341505201000000036101620000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_msg"
+   }
+  },
+  {
+   "name": "ext_257",
+   "desc": "extensiones de 257 B",
+   "hex": "434150520100000000010180ff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "ext_too_long"
+   }
+  },
+  {
+   "name": "ext_bad_len_known",
+   "desc": "retry_after con longitud 3",
+   "hex": "43415052010000000000050203000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_ext"
+   }
+  },
+  {
+   "name": "ext_dup_known",
+   "desc": "session_id repetido",
+   "hex": "43415052010000000000140308000000000000000003080000000000000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_ext"
+   }
+  },
+  {
+   "name": "ext_addr_family_mismatch",
+   "desc": "familia 6 con 4 bytes",
+   "hex": "4341505201000000000009040706010203040050",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_ext"
+   }
+  },
+  {
+   "name": "ext_tlv_overrun",
+   "desc": "TLV excede ext_len",
+   "hex": "4341505201000000000003050900",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "bad_ext"
+   }
+  },
+  {
+   "name": "truncated_0_stream_open",
+   "desc": "prefijo 0 B, flujo abierto",
+   "hex": "",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_0_eof",
+   "desc": "prefijo 0 B, fin de flujo",
+   "hex": "",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "truncated"
+   }
+  },
+  {
+   "name": "truncated_8_stream_open",
+   "desc": "prefijo 8 B, flujo abierto",
+   "hex": "4341505201000000",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_8_eof",
+   "desc": "prefijo 8 B, fin de flujo",
+   "hex": "4341505201000000",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "truncated"
+   }
+  },
+  {
+   "name": "truncated_9_stream_open",
+   "desc": "prefijo 9 B, flujo abierto",
+   "hex": "434150520100000002",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_9_eof",
+   "desc": "prefijo 9 B, fin de flujo",
+   "hex": "434150520100000002",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "truncated"
+   }
+  },
+  {
+   "name": "truncated_10_stream_open",
+   "desc": "prefijo 10 B, flujo abierto",
+   "hex": "4341505201000000026f",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_10_eof",
+   "desc": "prefijo 10 B, fin de flujo",
+   "hex": "4341505201000000026f",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "truncated"
+   }
+  },
+  {
+   "name": "truncated_16_stream_open",
+   "desc": "prefijo 16 B, flujo abierto",
+   "hex": "4341505201000000026f6b0004050205",
+   "eof": false,
+   "expect": {
+    "incomplete": true
+   }
+  },
+  {
+   "name": "truncated_16_eof",
+   "desc": "prefijo 16 B, fin de flujo",
+   "hex": "4341505201000000026f6b0004050205",
+   "eof": true,
+   "expect": {
+    "ok": false,
+    "error": "truncated"
+   }
+  }
+ ]
+}
