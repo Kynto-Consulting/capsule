@@ -480,13 +480,14 @@ components:
         planned_release_at: {type: [string, 'null'], format: date-time, description: 'Liberacion prevista por inactividad.'}
     Route:
       type: object
-      required: [id, service_id, host, transport, protocol, dest_host, dest_port, mode, project_id, org_id, service]
+      required: [id, service_id, host, transport, protocol, dest_host, dest_port, mode, project_id, org_id, service, project_slug]
       properties:
         id: {type: string, format: uuid}
         service_id: {type: string, format: uuid}
         project_id: {type: [string, 'null'], format: uuid}
         org_id: {type: string, format: uuid}
         service: {$ref: '#/components/schemas/ServiceName'}
+        project_slug: {type: string, description: "Slug del proyecto: (project_slug, service, transport) resuelve la ruta del tunel capsule/1, cuyo encabezado CAP1 lleva slugs. Vacio solo si el proyecto no se pudo leer."}
         host: {type: string, description: 'Host/SNI en minusculas.'}
         transport: {type: string, enum: [tcp, udp]}
         protocol: {$ref: '#/components/schemas/Protocol'}
@@ -502,6 +503,7 @@ components:
         service_id: {type: string, format: uuid}
         project_id: {type: [string, 'null'], format: uuid}
         org_id: {type: string, format: uuid}
+route_id: {type: string, format: uuid, description: 'Ruta por la que sale el puerto (la tcp si el servicio tiene ambas).'}        transport: {type: string, enum: [tcp, udp, both], description: 'Que enruta el servicio; las rutas UDP salen en el snapshot con transport udp.'}
     RouteSnapshot:
       type: object
       required: [rev, routes, leases]
@@ -516,7 +518,9 @@ components:
         route_id: {type: string, format: uuid}
         src_ip: {type: string, description: 'IPv4 o IPv6 canonica (`::ffff:a.b.c.d` normalizada a IPv4).'}
         credential_type: {type: string, enum: [cap, cgs, cgc, cgt, none]}
+        port: {type: integer, description: "Puerto arrendado cuando access = random_port."}
         credential: {type: string, description: 'Token tal cual; nunca se registra, solo su id/jti.'}
+        # credential_type `none` solo es valido con access `random_port`: se decide por lease vigente del puerto `port`, rango del pool y lista de IP del servicio (lista vacia o inexistente DENIEGA, aunque el proyecto sea publico). Cualquier otro uso de `none` es unauthorized. cache_ttl_seconds <= 30.
         access: {type: string, enum: [sni_name, capsule_uri, random_port]}
     AuthorizeResponse:
       type: object

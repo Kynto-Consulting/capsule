@@ -48,3 +48,17 @@ Consecuencias y decisión:
 1. `verify.sh --host`: descriptores/uso, pipes, RSS, `docker stats`, `free -m`, dueños del 443/80.
 2. Métricas del plan (sección 9): `gw_conns_active`, `gw_conns_total{result}`, `gw_port_pool_free`.
 3. Medir en el host real, con un cliente fuera de la instancia (no en loopback): 2000 conexiones ociosas de cada modo y un flujo con tráfico sostenido, anotando RSS del contenedor y `memory.stat` (`sock`) del cgroup. **Sin esa medición los topes de arriba son conservadores pero no verificados.**
+
+## 5. UDP y puertos aleatorios (G17 + G16, plano de datos)
+
+Medido en WSL con el binario real de `capsule-gateway` en un proceso aparte y los clientes en el proceso de prueba (N = 2000, `go test -run ProcessUDP`; **medido**, loopback, un destino de eco):
+
+| Elemento | Descriptores en el gateway | RSS por unidad | Notas |
+|---|---|---|---|
+| Sesión UDP del túnel (transport 2) | **2** (socket TCP del cliente + socket UDP al destino) | **~63 kB** (incluye la conexión TLS 1.3: el grueso) | Al cerrar las 2000 los descriptores volvieron a la base (13); el RSS no baja (Go retiene el heap, como en TCP). |
+| Flujo UDP de un puerto aleatorio (tabla NAT) | **1** (socket UDP conectado al destino; más 1 de escucha por lease) | **~8 kB** | Sin TLS: buffer de lectura de 2 KiB y una goroutine. Los flujos inactivos se cierran y devuelven el descriptor (13 al terminar). |
+| Listener de un lease | 1 TCP y/o 1 UDP por puerto arrendado | pocos kB (no medido por separado) | Solo existen para leases activos. |
+
+Presupuesto de descriptores (derivado): 10 000 leases con TCP y UDP añaden como máximo **20 000** descriptores de listener a los `6 x 6000 + 10 000 + ~1000` de la sección 3 (47 000 a ~57 000) y 6000 sesiones UDP de túnel añaden 12 000 (2 por sesión, sin pipes). El `nofile` de 131 072 sigue dejando más del doble de margen: no hace falta subirlo. Memoria (derivada): 2000 sesiones UDP de túnel son ~125 MB, así que **cada sesión UDP de túnel cuenta contra `CAPSULE_GW_MAX_CONNS` y compite con las 1500 conexiones con TLS terminado de la sección 1** (cuesta como una de ellas); los flujos de puertos aleatorios (~8 kB) son baratos. **No medido:** carga sostenida de datagramas (solo 5 por sesión) y la memoria de socket del kernel en el cgroup.
+
+Límites propios de UDP (configurables, ver `RUNBOOK-udp-pool.md`): 50 sesiones por ruta, 10 por (ruta, IP), 50 por proyecto; cola de 256 KiB por sesión (lo que no cabe se descarta y se cuenta); 100 flujos nuevos por segundo y por puerto arrendado y 2048 flujos como tope por puerto.
