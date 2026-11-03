@@ -85,7 +85,7 @@
 			# Secreto compartido con el backend (CAPSULE_GIT_AUTH_SECRET): sin el, /internal/git-auth responde 503.
 			header_up X-Capsule-Git-Auth {$CAPSULE_GIT_AUTH_SECRET}
 			# El backend responde siempre X-WEBAUTH-USER; aqui se renombra al nombre que lee Forgejo.
-			copy_headers X-WEBAUTH-USER>{$GIT_AUTH_HEADER:X-WEBAUTH-USER}
+			copy_headers X-WEBAUTH-USER>{$GIT_AUTH_HEADER:X-WEBAUTH-USER} X-WEBAUTH-EMAIL
 		}
 
 		# 4b. Con usuario validado (la cabecera de confianza solo pudo ponerla forward_auth: la entrante se borro en 1),
