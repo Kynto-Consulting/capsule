@@ -1,0 +1,7 @@
+[Unit]
+Description=Copy the tcp.apps certificate from Caddy to the Capsule gateway
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/capsule/deploy/gateway/sync-certs.sh

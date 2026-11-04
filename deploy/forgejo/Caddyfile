@@ -104,3 +104,9 @@
 		}
 	}
 }
+
+# Certificado del punto de entrada del tunel capsule:// (tcp.apps). Caddy solo obtiene y renueva el certificado (HTTP-01);
+# el gateway lo lee copiado a /opt/capsule/gateway/certs (deploy/gateway/sync-certs.sh). Sustituido por el comodin DNS-01 en la fase 2.
+tcp.apps.{$GATEWAY_ZONE:tumi-ai.com} {
+	respond "capsule gateway" 404
+}

@@ -109,7 +109,7 @@ puertos o miembros, vuelve a ejecutar `list`/`show`; tras un restore, comprueba 
     `0.0.0.0/0` ni `::/0`. Libéralos (`DELETE .../port`) al terminar (24 h de cuarentena).
 11. `capsule connect --listen` fuera de loopback expone tus credenciales a la red: no lo uses sin petición explícita.
 
-## Estado real (2026-11-03)
+## Estado real (2026-11-04)
 
 Leyenda: **desplegado** = corre en producción; **en el código** = commiteado y probado, sin desplegar;
 **planificado** = solo diseño.
@@ -119,18 +119,19 @@ Leyenda: **desplegado** = corre en producción; **en el código** = commiteado y
   en `:22`; el SSH de administración del host está en el **2200** (no es asunto de un agente). IPv6 aplicado en AWS
   (VPC, ALB `dualstack`, IPv6 de la instancia); DNS A de `git` y `db` existentes.
 - **Desplegado (CLI)**: conexiones internas, puertos TCP, firewall, acceso a bases, backups, IPv6 en reglas.
-- **En el código, NO desplegado**: el **gateway universal** (`capsule connect|tunnel|ssh`, URI `capsule://`,
-  host `tcp.<zona>`/`udp.<zona>`, protocolo `capsule/1`, librerías `cli/pkg/gatewayclient` y
-  `packages/gateway-js`), su API (servicios, `connection-info`, `connection-token`, tokens `cgs_`, puerto aleatorio
-  20000-29999, política de org `warn|error`, acción `project.connect`) y los **puertos UDP directos**. Dependen de
-  las migraciones **000060-000064, NO aplicadas en producción**: contra el servidor actual esas rutas no existen.
-  Detalle: `references/gateway.md`.
+- **Desplegado (gateway, fase 1)**: servicio `capsule-gateway` (host network) con migraciones **000060-000064** aplicadas.
+  Acceso **por nombre** `<servicio>-<proyecto>.db.tumi-ai.com:5432` (PostgreSQL con TLS, SNI clásico y `sslnegotiation=direct`)
+  y túnel **`capsule://proyecto/servicio`** (`capsule connect`) verificados en producción contra una base real, con la
+  lista de IP (vacía = deniega) y rechazos uniformes. El túnel escucha hoy en **`tcp.apps.tumi-ai.com:8443`** (el 443 sigue
+  siendo de Caddy): el cliente usa `CAPSULE_GATEWAY_PORT=8443` hasta la fase 2. El 8443 solo está abierto a IP concretas del
+  security group. Pool de puertos aleatorios 20000-29999 sembrado y abierto en el firewall (los listeners se abren con un
+  lease y lista de IP no vacía). Puertos UDP directos en el código y migración aplicada.
+- **En el código, sin probar en producción**: UDP por el túnel y por puertos aleatorios (probado en local), `capsule ssh`.
 - Piezas de infraestructura sin activar y límites: `references/estado-real.md`.
 
 ## Lo que NO existe todavía (no lo prometas ni lo intentes)
 
-- **Despliegue del gateway** (servicio `capsule-gateway`, migraciones 000060-000064, DNS `tcp.`/`udp.`): hoy
-  `capsule connect` no tiene a qué conectarse en producción.
+- **Gateway en el 443 y el comodín** (fase 2): hoy el túnel va por el 8443 y los nombres por el 5432; MySQL/Redis/Mongo no están.
 - **Planificado (ni siquiera en el código)**: certificado comodín DNS-01 y toma del 443; MySQL/Redis/Mongo por SNI en
   el puerto estándar; QUIC (`transport=3` responde `0x0109`); `capsule-agent`; dominios personalizados.
 - El **navegador no puede abrir TCP crudo**: no hay "conectar a la base desde el dashboard"; solo CLI y librerías.

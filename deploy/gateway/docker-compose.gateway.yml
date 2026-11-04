@@ -36,7 +36,7 @@ services:
     container_name: capsule-gateway
     restart: always
     network_mode: host
-    user: "10001:10001"
+    user: "65532:65532"
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -70,7 +70,7 @@ services:
     # gateway no lleva shell ni curl (read_only, sin paquetes), por eso el chequeo es del propio binario. Si G4 no lo implementa,
     # cambiar por: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9103/readyz >/dev/null"] con una imagen que traiga wget.
     healthcheck:
-      test: ["CMD", "/capsule-gateway", "healthcheck"]
+      test: ["CMD", "/capsule-gateway", "-healthcheck"]
       interval: 15s
       timeout: 3s
       retries: 3
