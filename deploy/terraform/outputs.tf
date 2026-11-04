@@ -4,7 +4,7 @@
 output "summary" {
   description = "Key infrastructure values"
   value = {
-    alb_dns_name        = aws_lb.capsule.dns_name
+    alb_dns_name        = try(aws_lb.capsule[0].dns_name, null)
     ecr_registry_url    = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
     artifacts_bucket    = aws_s3_bucket.artifacts.bucket
     db_subnet_group     = aws_db_subnet_group.capsule.name

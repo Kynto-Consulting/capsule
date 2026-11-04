@@ -145,5 +145,5 @@ output "builder_ipv6" {
 
 output "alb_dns_name_dualstack" {
   description = "ALB DNS name; with ip_address_type=dualstack it resolves to A and AAAA (Namecheap: CNAME *.apps to this name)"
-  value       = var.ipv6_enabled ? aws_lb.capsule.dns_name : null
+  value       = var.ipv6_enabled ? try(aws_lb.capsule[0].dns_name, null) : null
 }

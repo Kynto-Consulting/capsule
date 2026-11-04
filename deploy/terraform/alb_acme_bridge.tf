@@ -11,7 +11,7 @@ variable "alb_acme_bridge" {
 }
 
 resource "aws_lb_target_group" "acme_bridge" {
-  count       = var.alb_acme_bridge ? 1 : 0
+  count       = var.alb_acme_bridge && var.alb_enabled ? 1 : 0
   name        = "${var.app_name}-acme80"
   port        = 80
   protocol    = "HTTP"
@@ -38,7 +38,7 @@ resource "aws_lb_target_group" "acme_bridge" {
 }
 
 resource "aws_lb_target_group_attachment" "acme_bridge" {
-  count            = var.alb_acme_bridge ? 1 : 0
+  count            = var.alb_acme_bridge && var.alb_enabled ? 1 : 0
   target_group_arn = aws_lb_target_group.acme_bridge[0].arn
   target_id        = aws_instance.builder.id
   port             = 80
@@ -46,7 +46,7 @@ resource "aws_lb_target_group_attachment" "acme_bridge" {
 
 # El security group del servidor ya abre el 80 al mundo cuando git_enabled (git.tf); esta regla lo garantiza desde el ALB aunque no.
 resource "aws_security_group_rule" "acme_bridge_from_alb" {
-  count                    = var.alb_acme_bridge ? 1 : 0
+  count                    = var.alb_acme_bridge && var.alb_enabled ? 1 : 0
   type                     = "ingress"
   description              = "ALB to Caddy :80 (ACME HTTP-01 bridge)"
   from_port                = 80
@@ -57,8 +57,8 @@ resource "aws_security_group_rule" "acme_bridge_from_alb" {
 }
 
 resource "aws_lb_listener_rule" "acme_bridge" {
-  count        = var.alb_acme_bridge ? 1 : 0
-  listener_arn = aws_lb_listener.http.arn
+  count        = var.alb_acme_bridge && var.alb_enabled ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
   priority     = 1
 
   action {

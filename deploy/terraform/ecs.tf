@@ -118,7 +118,9 @@ resource "aws_acm_certificate" "apps_wildcard" {
 
 # Attach wildcard cert to the HTTPS listener so *.apps.tumi-ai.com resolves
 resource "aws_lb_listener_certificate" "apps_wildcard" {
-  listener_arn    = aws_lb_listener.https.arn
+  count = var.alb_enabled ? 1 : 0
+
+  listener_arn    = aws_lb_listener.https[0].arn
   certificate_arn = aws_acm_certificate.apps_wildcard.arn
 }
 
@@ -207,7 +209,7 @@ output "fargate_security_group_id" {
 
 output "https_listener_arn" {
   description = "ARN of the HTTPS ALB listener (used for dynamic app routing rules)"
-  value       = aws_lb_listener.https.arn
+  value       = try(aws_lb_listener.https[0].arn, null)
 }
 
 output "apps_wildcard_cert_validation" {
