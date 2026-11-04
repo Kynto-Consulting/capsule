@@ -125,6 +125,19 @@ resource "aws_security_group_rule" "gw_pool" {
   }
 }
 
+# 1b) The same pool over UDP: the gateway opens UDP flows on leased ports (docs/gateway/RUNBOOK-udp-pool.md). One rule too.
+resource "aws_security_group_rule" "gw_pool_udp" {
+  count             = local.gw
+  type              = "ingress"
+  description       = "capsule:gwpoolu"
+  from_port         = var.gateway_pool_from
+  to_port           = var.gateway_pool_to
+  protocol          = "udp"
+  security_group_id = aws_security_group.app.id
+  cidr_blocks       = var.gateway_public_cidrs
+  ipv6_cidr_blocks  = local.gw_v6
+}
+
 # 2) Standard ports (SNI routing by name): one rule each, IPv4 and IPv6 in the same resource.
 resource "aws_security_group_rule" "gw_standard" {
   for_each          = local.gw_ports
