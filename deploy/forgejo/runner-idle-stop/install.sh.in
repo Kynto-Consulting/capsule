@@ -1,0 +1,35 @@
+#!/bin/bash
+# Instala el apagado por inactividad en el runner. Idempotente; NO reinicia forgejo-runner
+# ni docker ni toca .runner. Pensado para AWS Systems Manager Run Command:
+#
+#   aws ssm send-command --instance-ids i-03e3e8ad27d3d8d85 \
+#     --document-name AWS-RunShellScript --parameters file://ssm-params.json
+#
+# donde ssm-params.json lleva en "commands" el contenido de este directorio (ver README.md
+# de este directorio: lo genera `make-ssm-params.sh`). Tambien lo usa el user_data de runner.tf.
+#
+# Variables opcionales: IDLE_MINUTES (15), GRACE_MINUTES (10). Reversa:
+#   touch /etc/forgejo-runner/idle-stop.disabled      (o: systemctl disable --now forgejo-runner-idle-stop.timer)
+set -euo pipefail
+# forgejo-runner ejecuta git en el host (actions/checkout); sin git todo job falla. Idempotente.
+command -v git >/dev/null 2>&1 || dnf install -y git
+IDLE_MINUTES="${IDLE_MINUTES:-15}"
+GRACE_MINUTES="${GRACE_MINUTES:-10}"
+mkdir -p /etc/forgejo-runner
+cat > /etc/forgejo-runner/idle-stop.env <<ENV
+IDLE_MINUTES=$IDLE_MINUTES
+GRACE_MINUTES=$GRACE_MINUTES
+ENV
+cat > /usr/local/sbin/forgejo-runner-idle-stop.sh <<'SCRIPT_EOF'
+@@IDLE_STOP_SH@@
+SCRIPT_EOF
+chmod 755 /usr/local/sbin/forgejo-runner-idle-stop.sh
+cat > /etc/systemd/system/forgejo-runner-idle-stop.service <<'UNIT_EOF'
+@@SERVICE@@
+UNIT_EOF
+cat > /etc/systemd/system/forgejo-runner-idle-stop.timer <<'UNIT_EOF'
+@@TIMER@@
+UNIT_EOF
+systemctl daemon-reload
+systemctl enable --now forgejo-runner-idle-stop.timer
+systemctl list-timers forgejo-runner-idle-stop.timer --no-pager

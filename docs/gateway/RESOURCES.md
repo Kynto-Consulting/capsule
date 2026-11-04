@@ -62,3 +62,24 @@ Medido en WSL con el binario real de `capsule-gateway` en un proceso aparte y lo
 Presupuesto de descriptores (derivado): 10 000 leases con TCP y UDP añaden como máximo **20 000** descriptores de listener a los `6 x 6000 + 10 000 + ~1000` de la sección 3 (47 000 a ~57 000) y 6000 sesiones UDP de túnel añaden 12 000 (2 por sesión, sin pipes). El `nofile` de 131 072 sigue dejando más del doble de margen: no hace falta subirlo. Memoria (derivada): 2000 sesiones UDP de túnel son ~125 MB, así que **cada sesión UDP de túnel cuenta contra `CAPSULE_GW_MAX_CONNS` y compite con las 1500 conexiones con TLS terminado de la sección 1** (cuesta como una de ellas); los flujos de puertos aleatorios (~8 kB) son baratos. **No medido:** carga sostenida de datagramas (solo 5 por sesión) y la memoria de socket del kernel en el cgroup.
 
 Límites propios de UDP (configurables, ver `RUNBOOK-udp-pool.md`): 50 sesiones por ruta, 10 por (ruta, IP), 50 por proyecto; cola de 256 KiB por sesión (lo que no cabe se descarta y se cuenta); 100 flujos nuevos por segundo y por puerto arrendado y 2048 flujos como tope por puerto.
+
+## Adenda G11: MySQL/MariaDB, Redis y MongoDB (medido en WSL, binario real, loopback)
+
+Base del proceso 10,5 MB. **1000 conexiones MySQL ociosas antes de enrutar** (saludo enviado, sin SSLRequest): +6,8 MB, **~7 KB por conexión**. **400 conexiones Redis TLS en passthrough** establecidas: **~15 KB por conexión**, 2 descriptores por conexión (815 con el resto del proceso). **120 conexiones MySQL en passthrough** establecidas: **~6,5 KB por conexión**. Tras cerrarlas todas los descriptores vuelven a 15 (sin fuga); el RSS no baja (el GC de Go retiene, como ya constaba). El presupuesto del plan (6000 conexiones, 512 MB) **no cambia**: cada protocolo suma ≤ 15 KB por conexión, dentro de los 25-75 KB de la derivación anterior. Nuevo tope por protocolo `CAPSULE_GW_PROTO_MAX_CONNS` (1500 por omisión para `mysql`, `redis` y `mongo`; la suma puede superar `CAPSULE_GW_MAX_CONNS`, que sigue mandando). Con `terminate` en MySQL hay dos sesiones TLS por conexión: contarlas como «terminadas» (~75 KB, **no medido** para MySQL).
+
+## Adenda G10: el 443 compartido, passthrough hacia Caddy (medido en WSL2, binario real, Caddy 2.11.7 real, loopback)
+
+Cuando el gateway toma el 443 (`CAPSULE_GW_TAKE_443=1`, `RUNBOOK-443.md`) todo el HTTPS de git y de la web pasa por él en passthrough hacia `127.0.0.1:8444`:
+
+| Elemento | Descriptores en el gateway | RSS | Notas |
+|---|---|---|---|
+| Conexión HTTPS pasante hacia Caddy (500 ociosas por el 443) | **2** (socket del cliente + socket hacia Caddy; **sin pipes**: el relevo de `relay.go` es de espacio de usuario, no `splice`) | proceso 13,3 MB en reposo → 23,4 MB con 500 = **~20 kB por conexión** | Al cerrarlas, los descriptores volvieron a 11 (la base). Caddy aparte: 17,8 → 35,8 MB (~36 kB por conexión TLS terminada en Caddy, tope del contenedor 128 m). |
+
+Consecuencias para los topes de las secciones 1-3:
+
+* **Las conexiones de Caddy cuentan contra `CAPSULE_GW_MAX_CONNS`** (6000) y compiten con bases y túneles: una conexión de git/web cuesta como una de passthrough (~20-28 kB, 2 descriptores). 6000 pasantes ≈ 120-170 MB y 12 000 descriptores (derivado de lo medido); `nofile` de 131 072 sigue sobrando. Caddy ya tenía 128 m de tope propio: el HTTPS terminado sigue costando su memoria a Caddy, no al gateway.
+* **El límite de tasa por IP (`CAPSULE_GW_NEW_CONNS_PER_IP`, 20/s, ráfaga 40) y de conexiones sin autenticar (`CAPSULE_GW_PREAUTH_PER_IP`, 100) se aplican antes de conocer el SNI**: también al HTTPS de git. Medido: 500 conexiones nuevas desde una sola IP en ráfaga fueron cortadas a partir de la ~40ª; repartidas entre 14 IP pasaron todas. Una oficina o CGNAT que clone/empuje con muchas conexiones nuevas puede toparlo: subir `CAPSULE_GW_NEW_CONNS_PER_IP` (sugerido 100) al tomar el 443.
+* **El tope de memoria del contenedor (384-512 m) es ahora también el techo del HTTPS de git por el 443**, pero no su memoria de TLS (la sigue poniendo Caddy). Si el gateway muere por OOM, cae el 443 completo hasta el reinicio (`restart: always`, ~2-5 s).
+* **Durante un relevo de gateway conviven dos procesos** (el viejo con las conexiones largas, hasta `CAPSULE_GW_DRAIN_TIMEOUT`, y el nuevo): sumar sus memorias y descriptores mientras dure. `git push` de 73 s medido a través de un relevo sin corte.
+* **Latencia añadida por el salto** (gateway → docker-proxy → Caddy, dos saltos locales): **≈ +0,5 a +1 ms en p50**, dentro del ruido de la máquina de pruebas (medido en 3 pares alternados de 300 conexiones nuevas; el plan estimaba ~+0,15 ms sin docker-proxy). **No medido en el host real.**
+* **No medido**: tráfico sostenido (MB/s) por el passthrough, más de 500 conexiones simultáneas, memoria de sockets del kernel en el cgroup.

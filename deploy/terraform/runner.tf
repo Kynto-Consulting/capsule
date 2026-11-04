@@ -153,6 +153,9 @@ resource "aws_instance" "ci_runner" {
     }
   }
 
+  # NOTE: changing user_data below REPLACES the instance (verified with plan). Packages/units added later
+  # (git, idle-stop) are installed on the live runner by deploy/forgejo/runner-idle-stop/install.sh via SSM;
+  # fold them into runner_user_data.sh.tftpl at the next planned recreation.
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/runner_user_data.sh.tftpl", {
     region       = var.aws_region

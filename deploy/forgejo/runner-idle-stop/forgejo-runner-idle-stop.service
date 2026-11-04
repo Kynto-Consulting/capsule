@@ -1,0 +1,8 @@
+[Unit]
+Description=Apaga el runner de CI si lleva N minutos sin jobs
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/forgejo-runner/idle-stop.env
+ExecStart=/usr/local/sbin/forgejo-runner-idle-stop.sh

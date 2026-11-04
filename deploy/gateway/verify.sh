@@ -2,7 +2,7 @@
 # Verificación del gateway universal. SOLO LECTURA: abre conexiones de prueba y lee estado; no cambia nada.
 #
 # Modo cliente (desde cualquier máquina con Internet; ideal una con IPv6 real, p. ej. un móvil o un VPS):
-#   verify.sh --ipv4 3.224.61.221 --ipv6 2600:1f18:... [--zone tumi-ai.com] [--test-port 8443]
+#   verify.sh --ipv4 3.224.61.221 --ipv6 2600:1f18:... [--zone tumi-ai.com] [--test-port 8443] [--git-domain git.tumi-ai.com]
 #             [--sni-name mi-proyecto.db.tumi-ai.com] [--pg "user=u dbname=d"]  (la clave: variable PGPASSWORD)
 # Modo host (en el servidor, solo lectura: ss, docker inspect/stats, /proc):
 #   verify.sh --host [--env /opt/capsule/deploy/gateway/gateway.env]
@@ -13,14 +13,14 @@
 set -u
 
 ZONE=tumi-ai.com; V4=""; V6=""; TEST_PORT=""; SNI_NAME=""; PGSTR=""; HOSTMODE=0; ENVF=/opt/capsule/deploy/gateway/gateway.env
-STD_PORTS="5432 3306 6379 27017"; POOL_SAMPLE=20000
+STD_PORTS="5432 3306 6379 27017"; POOL_SAMPLE=20000; GIT_DOMAIN=git.tumi-ai.com
 PASS=0; FAIL=0; SKIP=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --zone) ZONE=$2; shift 2;; --ipv4) V4=$2; shift 2;; --ipv6) V6=$2; shift 2;; --test-port) TEST_PORT=$2; shift 2;;
     --sni-name) SNI_NAME=$2; shift 2;; --pg) PGSTR=$2; shift 2;; --std-ports) STD_PORTS=$2; shift 2;;
-    --host) HOSTMODE=1; shift;; --env) ENVF=$2; shift 2;;
+    --host) HOSTMODE=1; shift;; --env) ENVF=$2; shift 2;; --git-domain) GIT_DOMAIN=$2; shift 2;;
     -h|--help) sed -n '2,15p' "$0"; exit 0;;
     *) echo "argumento desconocido: $1" >&2; exit 2;;
   esac
@@ -67,6 +67,31 @@ if [ "$HOSTMODE" -eq 1 ]; then
   done
   for p in 443 80; do ss -ltnp "sport = :$p" | tail -n +2 | sed "s/^/   puerto $p: /"; done
   echo "   (con CAPSULE_GW_TAKE_443=${CAPSULE_GW_TAKE_443:-0}: el dueño del 443 debe ser $( [ "${CAPSULE_GW_TAKE_443:-0}" = 1 ] && echo capsule-gateway || echo docker-proxy/caddy ))"
+
+  echo "-- 443 compartido con Caddy (CAPSULE_GW_TAKE_443=${CAPSULE_GW_TAKE_443:-0} en el archivo de entorno; lo efectivo es lo que muestra ss)"
+  own=$(ss -ltnpH 'sport = :443' 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | sed 's/.*(("//; s/"//')
+  if [ -z "$own" ] && ss -ltnH 'sport = :443' 2>/dev/null | grep -q .; then
+    if have docker && docker port capsule-git-proxy 443 2>/dev/null | grep -Eq ':443$'; then own=docker-proxy; elif have docker && docker ps --format '{{.Names}}' | grep -q '^capsule-gateway'; then own=capsule-gateway; fi
+  fi
+  case "${own:-nadie}" in
+    docker-proxy*|caddy*) ok "el 443 es de Caddy (modo F1); 8444 no debe escucharse"
+      ss -ltnH 'sport = :8444' 2>/dev/null | grep -q . && bad "8444 escucha con el 443 en Caddy: estado mixto (�conmutacion a medias? ver RUNBOOK-443.md)";;
+    capsule-gateway*) ok "el 443 es del gateway (modo F2)"
+      ss -ltnH 'sport = :8444' 2>/dev/null | grep -q '127.0.0.1:8444' && ok "Caddy escucha en 127.0.0.1:8444" || bad "nada escucha en 127.0.0.1:8444: el HTTPS de git falla"
+      ss -ltnH 'sport = :8444' 2>/dev/null | grep -Eq '(0\.0\.0\.0|\*|\[::\]):8444' && bad "8444 escucha en TODAS las interfaces (debe ser solo loopback)"
+      if have curl; then
+        code=$(curl -s -k -m 8 --haproxy-protocol --resolve "$GIT_DOMAIN:8444:127.0.0.1" -o /dev/null -w '%{http_code}' "https://$GIT_DOMAIN:8444/" 2>/dev/null)
+        case "$code" in 2??|3??|401|403|404) ok "Caddy acepta PROXY v2 en 8444 (HTTP $code)";; *) bad "Caddy no acepta PROXY v2 en 8444: '$code' (GW_PROXY_TRUSTED)";; esac
+        code=$(curl -s -k -m 8 --resolve "$GIT_DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' "https://$GIT_DOMAIN/" 2>/dev/null)
+        case "$code" in 2??|3??|401|403|404) ok "https://$GIT_DOMAIN por el 443 llega a Caddy (HTTP $code)";; *) bad "https://$GIT_DOMAIN por el 443: '$code'";; esac
+      fi
+      for mp in 9102 9112; do
+        if have curl && curl -sf -m 3 "http://127.0.0.1:$mp/metrics" 2>/dev/null | grep -q '^gw_take443_bound 1'; then ok "metrica gw_take443_bound=1 (instancia con admin en $mp)"; fi
+      done;;
+    nadie) bad "NADIE escucha el 443";;
+    *) bad "due�o inesperado del 443: $own";;
+  esac
+  [ "${CAPSULE_GW_TAKE_443:-0}" = 1 ] && [ "${own:-}" != capsule-gateway ] && echo "   (gateway.env dice TAKE_443=1 pero lo efectivo lo fija docker-compose.take443.yml: esto solo es un aviso)"
 
   echo "-- pool ${POOL} frente a puertos directos 40000-41999: no deben solaparse"
   lo=${POOL%-*}; hi=${POOL#*-}
@@ -157,6 +182,26 @@ if [ -n "$PGSTR" ] && [ -n "$SNI_NAME" ]; then
     [ "$r" = 1 ] && bad "sslsni=0 conectó: el gateway no debería poder enrutar sin nombre" || ok "sslsni=0 rechazado (sin nombre no hay ruta, esperado)"
   else skip "psql no está instalado (apt install postgresql-client)"; fi
 else skip "indique --sni-name y --pg para la prueba con psql (clave en PGPASSWORD)"; fi
+
+echo "-- 443 compartido: el HTTPS de $GIT_DOMAIN debe llegar a Caddy y capsule/1 al gateway"
+if have curl; then
+  for fam in 4 6; do
+    A=$V4; [ "$fam" = 6 ] && A=$V6; [ -z "$A" ] && continue
+    if [ "$fam" = 6 ] && [ -z "$CLIENT_V6" ]; then skip "IPv6 git: el cliente no tiene IPv6"; continue; fi
+    HH=$A; [ "$fam" = 6 ] && HH="[$A]"
+    code=$(curl -s -m 10 -g --resolve "$GIT_DOMAIN:443:$A" -o /dev/null -w '%{http_code}' "https://$GIT_DOMAIN/" 2>/dev/null)
+    case "$code" in 2??|3??|401|403|404) ok "IPv$fam https://$GIT_DOMAIN:443 -> HTTP $code (certificado valido, Caddy)";; *) bad "IPv$fam https://$GIT_DOMAIN:443 fallo ('$code')";; esac
+  done
+fi
+if have openssl; then
+  for fam in 4 6; do
+    A=$V4; [ "$fam" = 6 ] && A=$V6; [ -z "$A" ] && continue
+    if [ "$fam" = 6 ] && [ -z "$CLIENT_V6" ]; then continue; fi
+    [ "$fam" = 6 ] && A="[$A]"
+    if echo | timeout 8 openssl s_client -connect "$A:443" -servername "tcp.apps.$ZONE" -alpn capsule/1 -tls1_3 2>&1 | grep -q "ALPN protocol: capsule/1"; then ok "IPv$fam capsule/1 por el 443 (tcp.apps.$ZONE)"
+    else skip "IPv$fam capsule/1 por el 443 no negociado (normal con el 443 en Caddy o sin certificado de tcp.apps)"; fi
+  done
+fi
 
 echo "-- IPv6 real del cliente: ${CLIENT_V6:-no tiene salida IPv6}"
 echo; echo "Resumen: $PASS ok, $FAIL fallas, $SKIP omitidas"; [ "$FAIL" -eq 0 ]

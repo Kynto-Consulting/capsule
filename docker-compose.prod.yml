@@ -20,6 +20,9 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - S3_BUCKET=${S3_BUCKET:-capsule-artifacts-598806201852}
+      # CI runner scale-to-zero (empty = off): starts the stopped runner EC2 on push/PR
+      - CAPSULE_CI_RUNNER_INSTANCE_ID=${CAPSULE_CI_RUNNER_INSTANCE_ID:-}
+      - CAPSULE_CI_WAKE_MAX_PER_HOUR=${CAPSULE_CI_WAKE_MAX_PER_HOUR:-6}
       - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-598806201852}
       - CAPSULE_PUBLIC_HOST=${CAPSULE_PUBLIC_HOST:-api.tumi-ai.com}
       # ECS Fargate deploy target

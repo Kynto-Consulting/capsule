@@ -1,0 +1,44 @@
+# Override de compose para que el gateway tome el 443 (CAPSULE_GW_TAKE_443=1). NO edita docker-compose.prod.yml ni el Caddyfile de
+# produccion: se SUPERPONE como tercer archivo. Procedimiento completo y reversa: docs/gateway/RUNBOOK-443.md (switch-443.sh / rollback-443.sh).
+#
+#   cd /opt/capsule
+#   F="-f docker-compose.prod.yml -f deploy/gateway/docker-compose.gateway.yml -f deploy/gateway/docker-compose.take443.yml --profile gateway"
+#   docker compose $F config -q      # valida (requiere docker compose >= 2.24.4 por la etiqueta !override)
+#
+# Que cambia respecto al compose de produccion:
+#  * git-proxy (Caddy) deja de publicar 443:443 y publica 127.0.0.1:8444:443 (solo loopback: nadie de fuera llega a el sin pasar
+#    por el gateway). El 80 sigue en Caddy: ahi se renueva Let's Encrypt por HTTP-01 (tambien el certificado de tcp.apps).
+#  * git-proxy monta deploy/gateway/Caddyfile.take443 (identico salvo que el listener :443 exige un encabezado PROXY v2 del
+#    gateway, de GW_PROXY_TRUSTED).
+#  * capsule-gateway escucha el 443 por red del host (ya es network_mode: host). Corre como root DENTRO del contenedor pero con
+#    TODAS las capabilities fuera salvo NET_BIND_SERVICE, sistema de archivos de solo lectura y no-new-privileges: con un usuario
+#    no root Docker no entrega NET_BIND_SERVICE al proceso (no hay capabilities ambientales; las de archivo las anula
+#    no-new-privileges), y con network_mode host no se puede usar el sysctl ip_unprivileged_port_start. Medido: ver RUNBOOK-443.md.
+#
+# Variables (en /opt/capsule/.env o el entorno):
+#   GW_PROXY_TRUSTED   OBLIGATORIA. IP desde la que Caddy ve llegar al gateway = la IP del puente de Docker por el que docker-proxy
+#                      entrega 127.0.0.1:8444 (p. ej. 172.18.0.1/32). La calcula switch-443.sh; a mano:
+#                      docker network inspect <proyecto>_git-edge -f '{{(index .IPAM.Config 0).Gateway}}'  (y comprobarlo, ver runbook)
+#   CAPSULE_GW_CERTS_DIR  directorio de certificados del gateway (defecto /opt/capsule/gateway/certs, el mismo del compose base).
+
+services:
+  git-proxy:
+    ports: !override
+      - "80:80"
+      - "127.0.0.1:8444:443"
+    environment:
+      - GW_PROXY_TRUSTED=${GW_PROXY_TRUSTED:?set GW_PROXY_TRUSTED (IP del puente de Docker desde la que Caddy ve al gateway, p. ej. 172.18.0.1/32; ver RUNBOOK-443.md)}
+    volumes:
+      - ./deploy/gateway/Caddyfile.take443:/etc/caddy/Caddyfile:ro
+
+  capsule-gateway:
+    user: "0:0"
+    cap_add:
+      - DAC_READ_SEARCH   # root sin DAC_OVERRIDE no lee la clave 0600 de uid 65532 que deja sync-certs.sh (medido: "permission denied")
+    environment:
+      - CAPSULE_GW_TAKE_443=1
+      # Si un puerto sigue ocupado al arrancar (Caddy en el 443; o el gateway anterior, que corre con otro uid y no comparte SO_REUSEPORT),
+      # el gateway reintenta cada 100 ms hasta 10 min: corte sin hueco (RUNBOOK-443.md).
+      - CAPSULE_GW_BIND_RETRY=${CAPSULE_GW_BIND_RETRY:-10m}
+    volumes:
+      - ${CAPSULE_GW_CERTS_DIR:-/opt/capsule/gateway/certs}:/certs:ro

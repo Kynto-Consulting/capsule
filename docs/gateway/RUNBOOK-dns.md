@@ -59,11 +59,11 @@ Los nombres de desafío que hay que delegar son exactamente:
 
 | Host (Namecheap) | Tipo | Valor | TTL | Qué se rompe si falta |
 |---|---|---|---|---|
-| `_acme-challenge.db` | CNAME Record | `db.acme.tumi-ai.com.` (zona de Route53, ver abajo) | 5 min | No se puede emitir ni renovar el comodín `*.db`: el modo de terminación TLS del gateway deja de tener certificado válido a los 90 días |
+| `_acme-challenge.db` | CNAME Record | `db.acme.tumi-ai.com.` (zona de Route53 `acme.tumi-ai.com`) | 5 min | No se puede emitir ni renovar el comodín `*.db`: el modo de terminación TLS del gateway deja de tener certificado válido a los 90 días |
 | `_acme-challenge.apps` | CNAME Record | `apps.acme.tumi-ai.com.` | 5 min | Igual para `*.apps` (`tcp.apps`, `udp.apps` y servicios por SNI) |
 | `acme` | NS Record (×4) | los 4 servidores de la zona `acme.tumi-ai.com` de Route53 (`ns-….awsdns-….org.`, etc.) | 30 min | Sin la delegación, los CNAME anteriores apuntan a un nombre que nadie sirve |
 
-**Importante, lo que NO se puede dar exacto hoy:** los 4 valores NS solo existen **después de crear la zona** en Route53 (la crea G9, no está en este paquete: no se ha creado nada en AWS). Obtenerlos con: `aws route53 get-hosted-zone --id <ZONE_ID> --query DelegationSet.NameServers`. Costo aproximado de la zona: 0,50 USD/mes (?, del plan; verificar). Que Namecheap acepte registros NS de subdominio en su panel estándar (**?**) hay que confirmarlo; **alternativa sin NS:** crear la zona de Route53 para un dominio/subdominio que el dueño ya controle por completo y apuntar los dos CNAME a ella.
+**Valores reales del plan** (G9, `deploy/terraform/acme_zone.tf` con `acme_enabled = true`): los dos CNAME de la tabla son exactos. Los 4 NS los entrega `terraform output acme_ns_records` una vez creada la zona (paso A de `RUNBOOK-acme.md`; hasta entonces no se ha creado nada en AWS). Costo de la zona: unos 0,50 USD/mes (no verificado). Que Namecheap acepte registros NS de subdominio en su panel estándar (**?**) hay que confirmarlo; **alternativa sin NS:** crear la zona de Route53 para un dominio o subdominio que el dueño ya controle por completo y apuntar los dos CNAME a ella. Pasos, verificación, reversa y alarma: `RUNBOOK-acme.md`.
 
 Los CNAME de `_acme-challenge.*` no chocan con el comodín `*.apps`/`*.db` (nombres exactos). No poner TTL alto: el emisor crea y borra los TXT durante cada emisión.
 

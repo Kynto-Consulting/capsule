@@ -1,0 +1,11 @@
+[Unit]
+Description=Issue/renew the wildcard certificates (*.apps, *.db) by DNS-01 and reload the Capsule gateway
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/capsule/deploy/gateway/acme-issue.sh
+# Alarma barata: si algun certificado tiene < 21 dias, la unidad queda en "failed" (visible en systemctl --failed y en el chequeo del runbook).
+ExecStartPost=/opt/capsule/deploy/gateway/acme-issue.sh --check
+TimeoutStartSec=20min
