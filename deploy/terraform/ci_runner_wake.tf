@@ -22,11 +22,18 @@ data "aws_iam_policy_document" "ci_runner_wake" {
   }
 }
 
-resource "aws_iam_user_policy" "capsule_api_ci_runner_wake" {
+# A MANAGED policy attached to the user, not an inline one: IAM caps the sum of a user's inline policies at 2048 bytes and
+# capsule-api already uses most of it (PutUserPolicy failed with LimitExceeded). Managed policies allow 6144 bytes each.
+resource "aws_iam_policy" "capsule_api_ci_runner_wake" {
   count  = local.ci_runner_count
   name   = "${var.app_name}-api-ci-runner-wake"
-  user   = aws_iam_user.capsule_api.name
   policy = data.aws_iam_policy_document.ci_runner_wake[0].json
+}
+
+resource "aws_iam_user_policy_attachment" "capsule_api_ci_runner_wake" {
+  count      = local.ci_runner_count
+  user       = aws_iam_user.capsule_api.name
+  policy_arn = aws_iam_policy.capsule_api_ci_runner_wake[0].arn
 }
 
 output "ci_runner_wake_instance_id" {
