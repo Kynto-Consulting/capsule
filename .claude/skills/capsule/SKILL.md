@@ -122,18 +122,17 @@ Leyenda: **desplegado** = corre en producción; **en el código** = commiteado y
 - **Desplegado (gateway, fase 1)**: servicio `capsule-gateway` (host network) con migraciones **000060-000064** aplicadas.
   Acceso **por nombre** `<servicio>-<proyecto>.db.tumi-ai.com:5432` (PostgreSQL con TLS, SNI clásico y `sslnegotiation=direct`)
   y túnel **`capsule://proyecto/servicio`** (`capsule connect`) verificados en producción contra una base real, con la
-  lista de IP (vacía = deniega) y rechazos uniformes. El túnel escucha hoy en **`tcp.apps.tumi-ai.com:8443`** (el 443 sigue
-  siendo de Caddy): el cliente usa `CAPSULE_GATEWAY_PORT=8443` hasta la fase 2. El 8443 solo está abierto a IP concretas del
-  security group. Pool de puertos aleatorios 20000-29999 sembrado y abierto en el firewall (los listeners se abren con un
+  lista de IP (vacía = deniega) y rechazos uniformes. Desde 2026-11-04 el gateway tiene el **443**: el túnel entra por
+  `tcp.apps.tumi-ai.com:443` (sin `CAPSULE_GATEWAY_PORT`) y lo que no es suyo (git.tumi-ai.com) pasa sin terminar TLS a Caddy
+  (127.0.0.1:8444) con la IP real por PROXY v2. El 8443 es de pruebas y solo está abierto a IP concretas. Pool de puertos aleatorios 20000-29999 sembrado y abierto en el firewall (los listeners se abren con un
   lease y lista de IP no vacía). Puertos UDP directos en el código y migración aplicada.
 - **En el código, sin probar en producción**: UDP por el túnel y por puertos aleatorios (probado en local), `capsule ssh`.
 - Piezas de infraestructura sin activar y límites: `references/estado-real.md`.
 
 ## Lo que NO existe todavía (no lo prometas ni lo intentes)
 
-- **Gateway en el 443 y el comodín** (fase 2): hoy el túnel va por el 8443 y los nombres por el 5432; MySQL/Redis/Mongo no están.
-- **Planificado (ni siquiera en el código)**: certificado comodín DNS-01 y toma del 443; MySQL/Redis/Mongo por SNI en
-  el puerto estándar; QUIC (`transport=3` responde `0x0109`); `capsule-agent`; dominios personalizados.
+- **Certificado comodín** (`*.apps`, `*.db`, DNS-01) y MySQL/Redis/Mongo por nombre en producción: están en el código, sin desplegar ni puerto abierto.
+- **Planificado (ni siquiera en el código)**: QUIC (`transport=3` responde `0x0109`); `capsule-agent`; dominios personalizados.
 - El **navegador no puede abrir TCP crudo**: no hay "conectar a la base desde el dashboard"; solo CLI y librerías.
 - Variables con scope `build` aplicadas a la construcción (solo `runtime` y `both` se inyectan hoy).
 - Issues, wiki, proyectos, releases y packages de Forgejo (ocultos a propósito); PR desde forks; CodeQL y
