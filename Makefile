@@ -6,7 +6,7 @@
         test-backend test-frontend test-cli \
         lint-backend lint-frontend lint-cli \
         docker-build docker-up docker-down \
-        migrate-up migrate-down npm-publish
+        migrate-up migrate-down npm-publish \n        catalog-gen catalog-check routes-gen routes-check
 
 # ──────────────────────────────────────────────
 # Variables
@@ -80,6 +80,22 @@ test-integration: ## Run integration tests (requires running services)
 	@echo "🧪 Running integration tests..."
 	cd backend && $(GO) test -tags=integration -race -v ./...
 	@echo "✅ Integration tests passed"
+
+# ══════════════════════════════════════════════
+# PERMISSION ENGINE (docs/permissions)
+# ══════════════════════════════════════════════
+
+catalog-gen: ## Regenerate backend/internal/authz/catalog/catalog.json
+	cd backend && $(GO) test ./internal/authz/catalog -run TestCatalogJSONUpToDate -update -count=1
+
+catalog-check: ## Fail if catalog.json is stale or the catalog drifts from SPEC.md
+	cd backend && $(GO) test ./internal/authz/catalog -count=1
+
+routes-gen: ## Regenerate backend/internal/authz/routes_authz.golden from the router
+	cd backend && $(GO) run ./tools/routeperms
+
+routes-check: ## Fail if routes_authz.golden is stale
+	cd backend && $(GO) run ./tools/routeperms -check
 
 # ══════════════════════════════════════════════
 # LINT
