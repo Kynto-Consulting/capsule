@@ -3,7 +3,9 @@ resource "aws_lb" "capsule" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = data.aws_subnets.default.ids
+  # An ALB needs at least 2 AZs. Every extra subnet adds a public IPv4 address that AWS bills (~3.65 USD/month each), so the
+  # default is the explicit short list in var.alb_subnet_ids; empty keeps one subnet per AZ (all of them).
+  subnets = length(var.alb_subnet_ids) > 0 ? var.alb_subnet_ids : data.aws_subnets.default.ids
   # "dualstack" only when var.ipv6_enabled (ipv6.tf); the subnets need an IPv6 /64 first.
   ip_address_type = var.ipv6_enabled ? "dualstack" : "ipv4"
 
@@ -201,4 +203,10 @@ output "alb_zone_id" {
 output "http_listener_arn" {
   description = "ARN of the HTTP (port 80) ALB listener"
   value       = aws_lb_listener.http.arn
+}
+
+variable "alb_subnet_ids" {
+  description = "Subnets of the load balancer (at least 2, in different AZs). Empty = all default subnets. Each one carries a billed public IPv4 address."
+  type        = list(string)
+  default     = []
 }
