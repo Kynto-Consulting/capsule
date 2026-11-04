@@ -1,0 +1,77 @@
+# Sitios web de Capsule servidos por Caddy en el propio servidor (sustituyen al ALB). COMPARTIDO: lo importan
+# deploy/forgejo/Caddyfile y deploy/gateway/Caddyfile.take443 con `import /etc/caddy/sites.d/*.caddy`. Se monta SOLO con el override
+# deploy/gateway/docker-compose.alb-off.yml; sin ese montaje el glob no encuentra nada y Caddy sirve solo git (comportamiento anterior).
+# Procedimiento: docs/gateway/RUNBOOK-alb-removal.md
+#
+# Variables (todas con el valor de produccion por defecto; las pruebas locales las cambian):
+#   CAPSULE_APP_DOMAIN     app.tumi-ai.com      -> frontend
+#   CAPSULE_API_DOMAIN     api.tumi-ai.com      -> backend (con /internal/* cerrado)
+#   CAPSULE_APPS_ZONE      apps.tumi-ai.com     -> *.apps = proxy de apps del backend por Host (certificado comodin de lego)
+#   CAPSULE_FRONTEND       frontend:3000        CAPSULE_BACKEND  backend:8080
+#   CAPSULE_WILDCARD_CRT / _KEY  /certs/wildcard-apps.crt|key (montados de /opt/capsule/gateway/certs, solo lectura)
+#
+# Que replica del ALB: Host original; X-Forwarded-For con la IP real (la conexion llega con PROXY v2 y Caddy ya la ve como
+# remote_addr: reverse_proxy DESCARTA el X-Forwarded-For del cliente y escribe solo esa IP, asi es el ULTIMO elemento y no se puede
+# suplantar; sin trusted_proxies a proposito); X-Forwarded-Proto https; WebSocket y HTTP/2; sin limite de cuerpo (el del backend);
+# sin tiempo maximo de respuesta (logs en streaming).
+
+(capsule_edge) {
+	encode zstd gzip
+	log {
+		output stderr
+		format json
+	}
+	header -Server
+
+	route {
+		# Rutas internas del backend (/internal/git-auth, /internal/gateway/*, /internal/tls/ask): jamas hacia fuera. Sin distinguir
+		# mayusculas, con barras repetidas y con el path ya decodificado (/%69nternal).
+		@internal path_regexp (?i)^/+internal(/|$)
+		respond @internal 404
+
+		reverse_proxy {args[0]} {
+			# Reemplaza al X-Amzn-Trace-Id del ALB: el backend cierra /internal/git-auth y /internal/gateway/* si la cabecera existe
+			# (defensa en profundidad si el bloqueo de arriba fallara). Se SOBRESCRIBE: un valor del cliente no cambia nada.
+			header_up X-Amzn-Trace-Id capsule-edge
+			flush_interval -1
+			# Una recarga de Caddy (renovacion del certificado comodin) no corta los WebSocket de golpe.
+			stream_close_delay 5m
+			transport http {
+				dial_timeout 5s
+				# sin response_header_timeout ni write timeout: logs en streaming, subidas largas del CLI
+				keepalive 2m
+			}
+		}
+	}
+}
+
+{$CAPSULE_APP_DOMAIN:app.tumi-ai.com} {
+	import capsule_edge {$CAPSULE_FRONTEND:frontend:3000}
+}
+
+{$CAPSULE_API_DOMAIN:api.tumi-ai.com} {
+	import capsule_edge {$CAPSULE_BACKEND:backend:8080}
+}
+
+# Apps de los clientes por Host: <servicio>-<proyecto>.apps.tumi-ai.com. Certificado comodin por DNS-01 (acme-issue.sh); Caddy NO
+# lo renueva: tras cada renovacion el gancho de acme-issue.sh recarga Caddy (RUNBOOK-alb-removal.md).
+*.{$CAPSULE_APPS_ZONE:apps.tumi-ai.com} {
+	tls {$CAPSULE_WILDCARD_CRT:/certs/wildcard-apps.crt} {$CAPSULE_WILDCARD_KEY:/certs/wildcard-apps.key}
+	import capsule_edge {$CAPSULE_BACKEND:backend:8080}
+}
+
+# Dominios personalizados de clientes: cualquier otro nombre. El certificado se emite A DEMANDA solo si el backend lo avala
+# (on_demand_tls { ask } del bloque global: 200 = dominio verificado de un proyecto, otra cosa = se rechaza). El backend resuelve
+# el dominio con su middleware (Host original).
+https:// {
+	tls {
+		on_demand
+	}
+	import capsule_edge {$CAPSULE_BACKEND:backend:8080}
+}
+
+# HTTP en claro de los dominios personalizados (los sitios con nombre ya tienen su redireccion automatica a https). El desafio
+# HTTP-01 de ACME lo atiende Caddy ANTES que estas rutas (tambien para git y los dominios personalizados).
+http:// {
+	redir https://{host}{uri} 308
+}

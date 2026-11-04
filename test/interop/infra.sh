@@ -52,6 +52,16 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO app, tr;
 GRANT ALL ON SCHEMA public TO app, tr;
 SQL
   done
+  cat > "$W/pg/tgt/pg_hba.conf" <<HBA
+host all postgres 127.0.0.1/32 scram-sha-256
+hostssl app tr 127.0.0.1/32 trust
+hostssl app tr ::1/128 trust
+hostssl all all 127.0.0.1/32 scram-sha-256
+hostssl all all ::1/128 scram-sha-256
+HBA
+  chown postgres "$W/pg/tgt/pg_hba.conf"
+  as_pg $PGBIN/pg_ctl -D "$W/pg/tgt" reload >/dev/null
+  psql -h 127.0.0.1 -p 55441 -U postgres -d app -qc "DO \$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app') THEN CREATE ROLE app LOGIN PASSWORD 'app-pass-1'; CREATE ROLE tr LOGIN; END IF; END \$; GRANT ALL ON ALL TABLES IN SCHEMA public TO app, tr; GRANT ALL ON SCHEMA public TO app, tr;"
   echo up
   ;;
 down)

@@ -1,0 +1,16 @@
+# Override de compose: Caddy sirve app, api, *.apps y los dominios personalizados (sustituye al ALB). Cuarto archivo -f, SIN editar
+# docker-compose.prod.yml. Procedimiento y reversa: docs/gateway/RUNBOOK-alb-removal.md
+#
+#   cd /opt/capsule
+#   F="-f docker-compose.prod.yml -f deploy/gateway/docker-compose.gateway.yml -f deploy/gateway/docker-compose.take443.yml -f deploy/gateway/docker-compose.alb-off.yml --profile gateway"
+#   docker compose $F config -q
+#
+# Monta en git-proxy: (1) los sitios compartidos en /etc/caddy/sites.d/ (los dos Caddyfile importan ese directorio) y (2) el
+# directorio de certificados del gateway en SOLO LECTURA. Caddy corre como root dentro del contenedor, asi que lee la clave 0600
+# de uid 65532 sin cambiar permisos (CAP_DAC_OVERRIDE del root del contenedor; el contenedor no tiene --cap-drop). El volumen es
+# el directorio y no los archivos: lego sustituye los archivos con mv y un bind de archivo seguiria apuntando al inodo viejo.
+services:
+  git-proxy:
+    volumes:
+      - ./deploy/forgejo/caddy/capsule-sites.caddy:/etc/caddy/sites.d/capsule-sites.caddy:ro
+      - ${CAPSULE_GW_CERTS_DIR:-/opt/capsule/gateway/certs}:/certs:ro

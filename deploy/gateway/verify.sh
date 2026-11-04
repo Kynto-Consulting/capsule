@@ -2,7 +2,7 @@
 # Verificación del gateway universal. SOLO LECTURA: abre conexiones de prueba y lee estado; no cambia nada.
 #
 # Modo cliente (desde cualquier máquina con Internet; ideal una con IPv6 real, p. ej. un móvil o un VPS):
-#   verify.sh --ipv4 3.224.61.221 --ipv6 2600:1f18:... [--zone tumi-ai.com] [--test-port 8443] [--git-domain git.tumi-ai.com]
+#   verify.sh --ipv4 3.224.61.221 --ipv6 2600:1f18:... [--zone tumi-ai.com] [--test-port 8443] [--git-domain git.tumi-ai.com] [--custom-domain d.cliente.com] [--web-apps-host x-y.apps.tumi-ai.com]
 #             [--sni-name mi-proyecto.db.tumi-ai.com] [--pg "user=u dbname=d"]  (la clave: variable PGPASSWORD)
 # Modo host (en el servidor, solo lectura: ss, docker inspect/stats, /proc):
 #   verify.sh --host [--env /opt/capsule/deploy/gateway/gateway.env]
@@ -14,13 +14,13 @@ set -u
 
 ZONE=tumi-ai.com; V4=""; V6=""; TEST_PORT=""; SNI_NAME=""; PGSTR=""; HOSTMODE=0; ENVF=/opt/capsule/deploy/gateway/gateway.env
 STD_PORTS="5432 3306 6379 27017"; POOL_SAMPLE=20000; GIT_DOMAIN=git.tumi-ai.com
-PASS=0; FAIL=0; SKIP=0
+PASS=0; FAIL=0; SKIP=0; CUSTOM_DOMAIN=""; WEB_APPS_HOST=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --zone) ZONE=$2; shift 2;; --ipv4) V4=$2; shift 2;; --ipv6) V6=$2; shift 2;; --test-port) TEST_PORT=$2; shift 2;;
     --sni-name) SNI_NAME=$2; shift 2;; --pg) PGSTR=$2; shift 2;; --std-ports) STD_PORTS=$2; shift 2;;
-    --host) HOSTMODE=1; shift;; --env) ENVF=$2; shift 2;; --git-domain) GIT_DOMAIN=$2; shift 2;;
+    --host) HOSTMODE=1; shift;; --env) ENVF=$2; shift 2;; --git-domain) GIT_DOMAIN=$2; shift 2;; --custom-domain) CUSTOM_DOMAIN=$2; shift 2;; --web-apps-host) WEB_APPS_HOST=$2; shift 2;;
     -h|--help) sed -n '2,15p' "$0"; exit 0;;
     *) echo "argumento desconocido: $1" >&2; exit 2;;
   esac
@@ -202,6 +202,32 @@ if have openssl; then
     else skip "IPv$fam capsule/1 por el 443 no negociado (normal con el 443 en Caddy o sin certificado de tcp.apps)"; fi
   done
 fi
+
+echo "-- web sin ALB (Caddy): app, api, *.apps y /internal/* cerrado (certificado VALIDO, sin -k; ver docs/gateway/RUNBOOK-alb-removal.md)"
+if have curl && [ -n "$V4" ]; then
+  APPS_HOST="${WEB_APPS_HOST:-verify-probe-sin-proyecto.apps.$ZONE}"
+  for h in "app.$ZONE" "api.$ZONE" "$APPS_HOST"; do
+    code=$(curl -s -m 10 --resolve "$h:443:$V4" -o /dev/null -w '%{http_code} %{http_version} %{ssl_verify_result}' "https://$h/" 2>/dev/null)
+    case "$code" in
+      [1-4]??" "*" 0") ok "https://$h por la IP del servidor: HTTP ${code%% *} (h${code#* }, certificado valido)";;
+      *) bad "https://$h por la IP del servidor: '$code' (certificado invalido o sin respuesta; 3.. 4.. son normales segun la app)";;
+    esac
+  done
+  for h in "api.$ZONE" "app.$ZONE" "$APPS_HOST"; do
+    for p in /internal/git-auth /internal/gateway/routes /INTERNAL/x /internal/tls/ask?domain=x.example; do
+      code=$(curl -s -m 10 --resolve "$h:443:$V4" -o /dev/null -w '%{http_code}' "https://$h$p" 2>/dev/null)
+      [ "$code" = 404 ] && ok "https://$h$p -> 404 (cerrado)" || bad "https://$h$p -> '$code' (debe ser 404 desde fuera)"
+    done
+  done
+  c80=$(curl -s -m 10 --resolve "app.$ZONE:80:$V4" -o /dev/null -w '%{http_code} %{redirect_url}' "http://app.$ZONE/x" 2>/dev/null)
+  case "$c80" in 30[18]" https://app.$ZONE/x") ok "http://app.$ZONE -> redireccion a https ($c80)";; *) bad "http://app.$ZONE: '$c80' (se esperaba 308 a https)";; esac
+  if [ -n "$CUSTOM_DOMAIN" ]; then
+    code=$(curl -s -m 20 --resolve "$CUSTOM_DOMAIN:443:$V4" -o /dev/null -w '%{http_code} %{ssl_verify_result}' "https://$CUSTOM_DOMAIN/" 2>/dev/null)
+    case "$code" in [1-5]??" 0") ok "dominio personalizado $CUSTOM_DOMAIN: certificado a demanda valido (HTTP ${code%% *})";; *) bad "dominio personalizado $CUSTOM_DOMAIN: '$code'";; esac
+  else skip "indique --custom-domain <dominio verificado de un proyecto> para probar TLS a demanda"; fi
+  echo | timeout 8 openssl s_client -connect "$V4:443" -servername "no-avalado-$$.example.invalid" 2>&1 | grep -q "BEGIN CERTIFICATE" \
+    && bad "un nombre NO avalado recibio certificado (on_demand_tls ask no esta filtrando)" || ok "nombre no avalado: sin certificado (ask rechaza)"
+else skip "web sin ALB: falta curl o --ipv4"; fi
 
 echo "-- IPv6 real del cliente: ${CLIENT_V6:-no tiene salida IPv6}"
 echo; echo "Resumen: $PASS ok, $FAIL fallas, $SKIP omitidas"; [ "$FAIL" -eq 0 ]

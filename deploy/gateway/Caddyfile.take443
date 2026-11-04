@@ -28,6 +28,13 @@
 			read_header 10s
 			idle 2m
 		}
+		# Sin HTTP/3: el UDP/443 no se publica (Alt-Svc haria probar un puerto cerrado en cada cliente).
+		protocols h1 h2
+	}
+	# Certificados A DEMANDA para dominios personalizados (sitio https:// de capsule-sites.caddy): el backend decide.
+	# Contrato: GET /internal/tls/ask?domain=<host> -> 200 si es un dominio personalizado verificado, 404 si no. Red interna.
+	on_demand_tls {
+		ask {$CAPSULE_TLS_ASK:http://backend:8080/internal/tls/ask}
 	}
 	# 443 detras del gateway (CAPSULE_GW_TAKE_443=1): el gateway reenvia el TLS sin terminar y antepone un encabezado PROXY v2
 	# con la IP real del cliente. Solo se CREE el encabezado si llega de GW_PROXY_TRUSTED (la IP del puente Docker desde la que
@@ -122,6 +129,10 @@
 		}
 	}
 }
+
+# Sitios web de Capsule (app, api, *.apps, dominios personalizados): deploy/forgejo/caddy/capsule-sites.caddy, montado por
+# deploy/gateway/docker-compose.alb-off.yml. Sin el montaje este glob no encuentra archivos y no cambia nada.
+import /etc/caddy/sites.d/*.caddy
 
 # Certificado del punto de entrada del tunel capsule:// (tcp.apps). Caddy solo obtiene y renueva el certificado (HTTP-01);
 # el gateway lo lee copiado a /opt/capsule/gateway/certs (deploy/gateway/sync-certs.sh). Sustituido por el comodin DNS-01 en la fase 2.

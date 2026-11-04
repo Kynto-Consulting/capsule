@@ -114,3 +114,9 @@ done
 if [ "$changed" = 1 ] && [ "$STAGING" = 0 ]; then
   docker kill -s HUP "$GW_CONTAINER" >/dev/null 2>&1 && echo "SIGHUP enviado a $GW_CONTAINER" || echo "aviso: $GW_CONTAINER no esta en marcha; recargara al arrancar"
 fi
+# Caddy (git-proxy) sirve *.apps.<zona> con ESTE mismo certificado (deploy/forgejo/caddy/capsule-sites.caddy) y no recarga archivos
+# solo: SIGUSR1 le hace releer el Caddyfile y sus certificados (medido con admin off; los WebSocket abiertos sobreviven por
+# stream_close_delay). Sin el override docker-compose.alb-off.yml el certificado no esta montado y la recarga es inocua.
+if [ "$changed" = 1 ] && [ "$STAGING" = 0 ]; then
+  docker kill -s USR1 "${ACME_CADDY_CONTAINER:-capsule-git-proxy}" >/dev/null 2>&1 && echo "SIGUSR1 enviado a ${ACME_CADDY_CONTAINER:-capsule-git-proxy} (recarga el certificado comodin)" || echo "aviso: Caddy no esta en marcha; leera el certificado al arrancar"
+fi

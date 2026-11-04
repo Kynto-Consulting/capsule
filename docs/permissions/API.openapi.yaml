@@ -43,6 +43,7 @@ paths:
       summary: Catalogo de permisos atomicos
       description: Fuente unica para la UI y el CLI. Cacheable por `catalog_version`.
       x-permission: { permissions: [], scope: self, tokens: allowed }
+      x-status: implemented
       responses:
         "200":
           description: Catalogo
@@ -67,6 +68,7 @@ paths:
       tags: [me]
       summary: Permisos efectivos del usuario autenticado (fuente de la UI y del sidebar)
       x-permission: { permissions: [], scope: self, tokens: allowed }
+      x-status: implemented
       parameters:
         - { name: org, in: query, schema: { type: string }, description: "id o slug; por defecto la organizacion activa" }
         - { name: project, in: query, schema: { type: string, format: uuid }, description: "devuelve permissions[] en claro para ese proyecto" }
@@ -88,6 +90,7 @@ paths:
       tags: [me]
       summary: Por que tengo (o no) un permiso
       x-permission: { permissions: [], scope: self, tokens: allowed }
+      x-status: implemented
       parameters:
         - { name: permission, in: query, required: true, schema: { type: string } }
         - { name: org, in: query, required: true, schema: { type: string } }
@@ -104,6 +107,7 @@ paths:
       tags: [templates]
       summary: Plantillas visibles (sistema y de la organizacion)
       x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      x-status: implemented
       parameters:
         - { name: kind, in: query, schema: { type: string, enum: [org, project, repo] } }
         - { name: include_archived, in: query, schema: { type: boolean, default: false } }
@@ -116,6 +120,7 @@ paths:
       tags: [templates]
       summary: Crear plantilla personalizada (o clonar con `cloned_from`)
       x-permission: { permissions: ["template:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/TemplateInput" } } }
@@ -129,6 +134,7 @@ paths:
       tags: [templates]
       summary: Plantilla con su ultima version y recuento de uso
       x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      x-status: implemented
       responses:
         "200": { description: Plantilla, content: { application/json: { schema: { $ref: "#/components/schemas/Template" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -137,6 +143,7 @@ paths:
       summary: Publicar una version nueva (n+1)
       description: Con `dry_run=true` no guarda y devuelve el impacto. Solo se pueden AGREGAR permisos que el actor posea. Las plantillas del sistema responden 409 SYSTEM_TEMPLATE.
       x-permission: { permissions: ["template:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       parameters:
         - { name: dry_run, in: query, schema: { type: boolean, default: false } }
       requestBody:
@@ -151,6 +158,7 @@ paths:
       tags: [templates]
       summary: Archivar (si esta en uso) o borrar (si no tiene asignaciones)
       x-permission: { permissions: ["template:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       responses:
         "204": { description: Hecho }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -160,6 +168,7 @@ paths:
       tags: [templates]
       summary: Historial de versiones
       x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      x-status: implemented
       responses:
         "200": { description: Versiones, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/TemplateVersion" } } } } } } }
   /orgs/{orgID}/templates/{templateID}/versions/{from}/diff/{to}:
@@ -172,6 +181,7 @@ paths:
       tags: [templates]
       summary: Permisos agregados y quitados entre dos versiones
       x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      x-status: implemented
       responses:
         "200": { description: Diff, content: { application/json: { schema: { type: object, properties: { added: { type: array, items: { type: string } }, removed: { type: array, items: { type: string } } } } } } }
   /orgs/{orgID}/groups:
@@ -180,6 +190,7 @@ paths:
       tags: [groups]
       summary: Grupos de la organizacion
       x-permission: { permissions: ["group:read"], scope: org, tokens: denied }
+      x-status: implemented
       parameters:
         - { name: q, in: query, schema: { type: string } }
         - { $ref: "#/components/parameters/Cursor" }
@@ -189,6 +200,7 @@ paths:
       tags: [groups]
       summary: Crear grupo
       x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/GroupInput" } } } }
       responses:
         "201": { description: Creado, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
@@ -199,6 +211,7 @@ paths:
       tags: [groups]
       summary: Grupo con sus asignaciones
       x-permission: { permissions: ["group:read"], scope: org, tokens: denied }
+      x-status: implemented
       responses:
         "200": { description: Grupo, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -206,6 +219,7 @@ paths:
       tags: [groups]
       summary: Renombrar o cambiar descripcion
       x-permission: { permissions: ["group:manage"], scope: org, tokens: denied }
+      x-status: implemented
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/GroupInput" } } } }
       responses:
         "200": { description: Actualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
@@ -213,6 +227,7 @@ paths:
       tags: [groups]
       summary: Archivar el grupo (sus asignaciones dejan de contar)
       x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       responses:
         "204": { description: Archivado }
   /orgs/{orgID}/groups/{groupID}/members:
@@ -221,6 +236,7 @@ paths:
       tags: [groups]
       summary: Miembros del grupo
       x-permission: { permissions: ["group:read"], scope: org, tokens: denied }
+      x-status: implemented
       parameters: [ { $ref: "#/components/parameters/Cursor" } ]
       responses:
         "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/GroupMemberPage" } } } }
@@ -228,6 +244,7 @@ paths:
       tags: [groups]
       summary: Agregar miembros (concesion: regla de no-escalada, SPEC 13.1)
       x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       requestBody:
         required: true
         content:
@@ -247,6 +264,7 @@ paths:
       tags: [groups]
       summary: Quitar a una persona del grupo
       x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       responses:
         "204": { description: Quitada }
   /orgs/{orgID}/assignments:
@@ -255,6 +273,7 @@ paths:
       tags: [assignments]
       summary: Asignaciones (filtrables por sujeto, alcance y plantilla)
       x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      x-status: implemented
       parameters:
         - { name: subject_type, in: query, schema: { type: string, enum: [user, group] } }
         - { name: subject_id, in: query, schema: { type: string, format: uuid } }
@@ -272,6 +291,7 @@ paths:
         Requiere `assignment:grant` EN el alcance de la asignacion y contener los permisos de la plantilla (no-escalada). Para alcance
         project/repo/env la autorizacion se evalua sobre ese alcance aunque la ruta sea de organizacion.
       x-permission: { permissions: ["assignment:grant"], scope: org, tokens: denied, sensitive: true, note: "se re-evalua en el alcance de la asignacion" }
+      x-status: implemented
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AssignmentInput" } } } }
       responses:
         "201": { description: Creada, content: { application/json: { schema: { $ref: "#/components/schemas/Assignment" } } } }
@@ -284,6 +304,7 @@ paths:
       tags: [assignments]
       summary: Una asignacion
       x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      x-status: implemented
       responses:
         "200": { description: Asignacion, content: { application/json: { schema: { $ref: "#/components/schemas/Assignment" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -292,6 +313,7 @@ paths:
       summary: Cambiar caducidad, razon o version fijada
       description: Cambiar la plantilla es revocar y crear (queda auditado como dos eventos con el mismo `change_id`).
       x-permission: { permissions: ["assignment:grant"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       requestBody:
         required: true
         content:
@@ -308,6 +330,7 @@ paths:
       tags: [assignments]
       summary: Revocar
       x-permission: { permissions: ["assignment:grant"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       responses:
         "204": { description: Revocada }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -318,6 +341,7 @@ paths:
       summary: Quien tiene acceso al proyecto, con origen (floor, base, directa, grupo) y permisos efectivos
       description: Sustituye en la UI a `GET .../members`, que se conserva por compatibilidad.
       x-permission: { permissions: ["assignment:read"], scope: project, tokens: denied }
+      x-status: implemented
       parameters: [ { $ref: "#/components/parameters/Cursor" } ]
       responses:
         "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAccessPage" } } } }
@@ -329,6 +353,7 @@ paths:
       summary: Sobrescribir el modo de acceso del proyecto (open, restricted, o null para heredar de la organizacion)
       description: Pasar a restricted calcula quien perderia visibilidad; sin `confirm=true` responde 409 WOULD_HIDE con la lista (incluido el actor).
       x-permission: { permissions: ["org:access-policy"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       parameters: [ { name: confirm, in: query, schema: { type: boolean, default: false } } ]
       requestBody:
         required: true
@@ -342,6 +367,7 @@ paths:
       tags: [access]
       summary: Permisos efectivos de otra persona (org, proyectos o un proyecto concreto)
       x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      x-status: implemented
       parameters:
         - { name: project, in: query, schema: { type: string, format: uuid } }
         - { name: expand, in: query, schema: { type: string, enum: [projects] } }
@@ -354,6 +380,7 @@ paths:
       tags: [access]
       summary: Puede X hacer Y sobre Z, y por que
       x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      x-status: implemented
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SimulateRequest" } } } }
       responses:
         "200": { description: Decision con rastro, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
@@ -379,6 +406,7 @@ paths:
       summary: Cambiar la plantilla de organizacion de una persona (`owner` solo por transferencia o por otro owner)
       description: Equivale a `PATCH /members/{id}` con `role`; este admite plantillas personalizadas (requiere `custom_roles`). No-escalada aplicada.
       x-permission: { permissions: ["member:update"], scope: org, tokens: denied, sensitive: true }
+      x-status: implemented
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [template], properties: { template: { type: string, description: "slug de plantilla kind=org" } } } } }
@@ -501,6 +529,7 @@ paths:
       tags: [audit]
       summary: Auditoria de cambios de acceso (vista filtrada de audit_logs con action access.*)
       x-permission: { permissions: ["audit:read"], scope: org, tokens: denied }
+      x-status: implemented
       parameters:
         - { name: action, in: query, schema: { type: string, example: "access.assignment.*" } }
         - { name: actor, in: query, schema: { type: string, format: uuid } }
