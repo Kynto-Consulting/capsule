@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"net/http"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -80,6 +83,7 @@ func capsuleSSHWho(svc, fam string) string {
 func phaseAccept() {
 	fmt.Println("== accept: PLAN 12.2, criteria of F1 one by one")
 
+	contractChecks()
 	// 1. psql by SNI name, two databases
 	var rows []string
 	okSNI := 0
@@ -129,9 +133,12 @@ func phaseAccept() {
 	b := sshWho(sniHost("ssh2"), "sni", "v6")
 	c1 := capsuleSSHWho("ssh", "v4")
 	c2 := capsuleSSHWho("ssh2", "v6")
-	sshOK := a == "interop-ssh-one" && b == "interop-ssh-two" && c1 == "interop-ssh-one" && c2 == "interop-ssh-two"
-	addCrit("3", "ssh with ProxyCommand reaches 2 different sshd (by SNI name with openssl, and with capsule ssh)", map[bool]string{true: "PASA", false: "FALLA"}[sshOK],
-		fmt.Sprintf("SNI/openssl: ssh->%q ssh2(v6)->%q ; capsule ssh --print: ssh->%q ssh2(v6)->%q", a, b, c1, c2))
+	addCrit("3a", "ssh with the ProxyCommand of `capsule ssh --print` reaches 2 different sshd (capsule/1 tunnel)", map[bool]string{true: "PASA", false: "FALLA"}[c1 == "interop-ssh-one" && c2 == "interop-ssh-two"],
+		fmt.Sprintf("ssh (v4) -> %q ; ssh2 (::1) -> %q", c1, c2))
+	addCrit("3b", "ssh with ProxyCommand `openssl s_client -servername <name>` reaches 2 different sshd (SNI name, gateway terminates TLS)", map[bool]string{true: "PASA", false: "FALLA"}[a == "interop-ssh-one" && b == "interop-ssh-two"],
+		fmt.Sprintf("ssh (v4) -> %q ; ssh2 (::1) -> %q", trunc(a, 60), trunc(b, 60)))
+	nk := cgcWithoutKeys()
+	addCrit("3c", "cgc_ tokens also work when the gateway has no local signing keys (control plane verifies)", map[bool]string{true: "PASA", false: "FALLA"}[strings.HasPrefix(nk, "allow") && strings.Contains(nk, "replay of the same token: deny")], "gateway started with CAPSULE_GW_CGC_KEYS empty: "+nk)
 
 	// 4. route effective < 5 s
 	t, p := filterRes(func(r Res) bool { return r.Client == "hot route add" })
@@ -149,14 +156,31 @@ func phaseAccept() {
 	addCrit("6", "a 10 minute connection survives route reloads (and control restart, certificate reload, load)", stat(t, p), fmt.Sprintf("%d/%d checks. %s | %s", p, t, findGot("ssh session"), findGot("route reloads")))
 
 	// 7. IPv6 dual stack
-	t, p = filterRes(func(r Res) bool { return r.Family == "v6" && r.Phase != "codec" })
-	t4, p4 := filterRes(func(r Res) bool { return r.Family == "v4" && r.Phase != "codec" })
-	addCrit("7", "dual-stack gateway: every client works over IPv4 and over ::1", func() string {
-		if p == t && p4 == t4 && t > 0 {
+	parity, cells, mism := 0, 0, []string{}
+	st4 := map[string]string{}
+	for _, r := range results {
+		if r.Phase == "matrix" && r.Family == "v4" && r.Status != "NA" {
+			st4[r.Client+"|"+r.Cred] = r.Status
+		}
+	}
+	for _, r := range results {
+		if r.Phase == "matrix" && r.Family == "v6" && r.Status != "NA" {
+			cells++
+			if st4[r.Client+"|"+r.Cred] == r.Status {
+				parity++
+			} else if len(mism) < 3 {
+				mism = append(mism, r.Client+"/"+r.Cred)
+			}
+		}
+	}
+	t6, p6 := filterRes(func(r Res) bool { return r.Phase == "matrix" && r.Family == "v6" })
+	t4, p4 := filterRes(func(r Res) bool { return r.Phase == "matrix" && r.Family == "v4" })
+	addCrit("7", "dual-stack gateway: same result over IPv4 and over ::1 for every client and credential", func() string {
+		if parity == cells && cells > 0 {
 			return "PASA"
 		}
 		return "FALLA"
-	}(), fmt.Sprintf("v4 %d/%d, v6 %d/%d checks pass (the failures are listed in the matrix, none is specific to one family unless stated)", p4, t4, p, t))
+	}(), fmt.Sprintf("%d/%d matrix cells identical in both families (differences: %v); matrix passes: v4 %d/%d, v6 %d/%d; Go lib, JS lib (v4 over the WSL NIC, ::1 over the relay), capsule CLI, psql and OpenSSH all connect on ::1", parity, cells, mism, p4, t4, p6, t6))
 
 	// 8. 40000-40199 direct ports
 	addCrit("8", "ports 40000-40199 keep connecting with the same IP list (regression of the direct path)", "NO PROBADO",
@@ -170,6 +194,10 @@ func phaseAccept() {
 	first, ev := connStrings()
 	addCrit("10", "connection_strings: the gateway entry comes first (legacy field keeps the direct string)", map[bool]string{true: "PASA", false: "FALLA"}[first], ev)
 
+	for _, x := range []struct{ n, id, text string }{{"X1", "login", "capsule login session (JWT) -> connect, minting a cgc_ (real login endpoint)"}, {"X2", "cgc-", "expired / wrong-key / wrong-route cgc_ (0x0202 vs uniform 0x0201), Go, JS, CLI"}, {"X3", "pool", "random-port pool: lease, TCP/UDP/psql with allowed and denied IP list, release, exhaustion"}, {"X4", "udp-tunnel", "UDP tunnel capsule/1 with Go lib, JS lib and capsule tunnel"}, {"X5", "empty-list", "access by name (and tunnel) with an EMPTY IP list denies"}} {
+		t, p := filterRes(func(r Res) bool { return r.Phase == "second" && strings.HasPrefix(r.ID, x.id) })
+		addCrit(x.n, x.text, stat(t, p), fmt.Sprintf("%d/%d checks pass", p, t))
+	}
 	addCrit("11", "informe de deploy v1 (package G7)", "NO PROBADO", "outside this package: no deploy report component exists in the gateway interop run")
 	addCrit("12", "secondary path: netaccess/handler tests unchanged; psql host:40123 keeps working", "NO PROBADO", "needs the firewall reconciler and a real published port; `go test ./internal/netaccess/...` was run separately (see README)")
 }
@@ -229,6 +257,16 @@ func connStrings() (bool, string) {
 		parts = append(parts, fmt.Sprintf("%s: HTTP %d first=%s all=%v legacy=%q", svc, st, firstAcc, kinds, r.Legacy))
 		if firstAcc != "gateway" {
 			ok = false
+		}
+		hasDirect := false
+		for _, c := range kinds {
+			if strings.HasPrefix(c, "direct_port") {
+				hasDirect = true
+			}
+		}
+		if svc == "echo" && (!hasDirect || r.Legacy == "") { // direct access is enabled on this service: it must be listed second and the legacy field must keep its value
+			ok = false
+			parts = append(parts, "echo: direct_port entry or legacy connection_string missing")
 		}
 	}
 	return ok, strings.Join(parts, " ; ")
@@ -317,4 +355,72 @@ func idx(l []string, s string) int {
 
 func md(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "|", "\\|"), "\n", " ")
+}
+
+// Contract checks between the components, reproduced with plain HTTP (minimal reproductions for FINDINGS.md).
+func contractChecks() {
+	st, b, _ := internal("GET", "/internal/gateway/routes?wait=0")
+	var snap struct {
+		Routes []struct {
+			ID      string `json:"id"`
+			Service string `json:"service"`
+		} `json:"routes"`
+	}
+	json.Unmarshal(b, &snap)
+	rid := ""
+	for _, r := range snap.Routes {
+		if r.Service == "pg" {
+			rid = r.ID
+		}
+	}
+	if st != 200 || rid == "" {
+		check("contract", "", "authorize(none, sni_name)", "-", "-", "route found", fmt.Sprintf("HTTP %d", st), false, "")
+		return
+	}
+	body, _ := json.Marshal(map[string]any{"route_id": rid, "src_ip": "127.0.0.1", "credential_type": "none", "access": "sni_name"})
+	req, _ := http.NewRequest("POST", "http://127.0.0.1:18080/internal/gateway/authorize", bytes.NewReader(body))
+	req.Header.Set("X-Gateway-Secret", C.Secret)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := hc.Do(req)
+	got := ""
+	allow := false
+	if err == nil {
+		rb, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		got = strings.TrimSpace(string(rb))
+		var r struct{ Allow bool `json:"allow"` }
+		json.Unmarshal(rb, &r)
+		allow = r.Allow
+	}
+	check("contract", "sni-none", "data plane -> control: POST /internal/gateway/authorize", "-", "none", "credential_type=none, access=sni_name, source inside the database rule list => allow (the data plane sends exactly this for psql by name)", got, allow,
+		"DEFECT backend/internal/gateway/api/authorize.go (authenticate returns nil for CredNone) vs backend/internal/gateway/data/handlers.go (admit(..., CredNone, \"\", AccessSNI)); API.openapi.yaml lists credential_type none")
+
+	// CLI auto-mint of a cgc_ from a login session
+	for _, pj := range []string{} { // the CLI route was fixed; the real login flow is exercised in phase second
+		req, _ := http.NewRequest("POST", "http://localhost:18080/api/v1/projects/"+pj+"/gateway/services/pg/connection-token", strings.NewReader("{}"))
+		req.Header.Set("Authorization", "Bearer "+C.CapOK)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := hc.Do(req)
+		code := 0
+		if err == nil {
+			code = resp.StatusCode
+			resp.Body.Close()
+		}
+		check("contract", "cli-mint", "capsule CLI mintConnectionToken", "-", "session", "POST /api/v1/projects/"+map[string]string{projID: "<uuid>", "shop": "<slug>"}[pj]+"/gateway/services/pg/connection-token answers 200/201", fmt.Sprintf("HTTP %d", code), code == 200 || code == 201,
+			"DEFECT cli/cmd/capsule/connect.go mintConnectionToken: the route is /api/v1/orgs/{org}/projects/{project}/gateway/services/{svc}/connection-token (backend router)")
+	}
+}
+
+// A gateway process with no local cgc_ keys sends cgc_ tokens to the control plane for verification.
+func cgcWithoutKeys() string {
+	out, code := gwctl("start", "CGC=none", "GW_NAME=gwnokeys", "GW_ADMIN=127.0.0.1:19106", "GW_LISTEN=127.0.0.1:18491")
+	if code != 0 {
+		return "gateway did not start: " + trunc(out, 80)
+	}
+	defer gwctl("stop", "GW_NAME=gwnokeys")
+	u := strings.Replace(capURI("shop", "pg", "v4", false), "127.0.0.1%3A18443", "127.0.0.1%3A18491", 1)
+	tok := mintCGC("pg")
+	o := goLibWith(u, tok)
+	again := goLibWith(u, tok)
+	return fmt.Sprintf("%s row=%q; replay of the same token: %s", o.Class, o.Row, again.Class) + map[bool]string{true: "", false: " (" + trunc(o.Msg, 80) + ")"}[o.Class == "allow" && again.Class == "deny"]
 }

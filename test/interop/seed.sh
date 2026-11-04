@@ -28,6 +28,7 @@ INSERT INTO databases (id,project_id,org_id,name,engine,version,host,port,db_nam
  ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000b1','pg','postgres','18','127.0.0.1',55441,'app','\x00','ready','',''),
  ('00000000-0000-0000-0000-0000000000d3','00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000b1','pg2','postgres','18','127.0.0.1',55442,'app','\x00','ready','',''),
  ('00000000-0000-0000-0000-0000000000d2','00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000b1','pgdeny','postgres','18','127.0.0.1',55441,'app','\x00','ready','','');
+INSERT INTO databases (id,project_id,org_id,name,engine,version,host,port,db_name,credentials_enc,status,container_id,volume_name) VALUES ('00000000-0000-0000-0000-0000000000d4','00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000b1','pgempty','postgres','18','127.0.0.1',55441,'app','\x00','ready','','');
 INSERT INTO database_access_rules (database_id,cidr)
  SELECT d.id, c FROM (VALUES ('00000000-0000-0000-0000-0000000000d1'::uuid),('00000000-0000-0000-0000-0000000000d3'::uuid)) d(id),
  (VALUES ('127.0.0.0/8'),('::1/128'),('172.16.0.0/12'),('10.0.0.0/8'),('192.168.0.0/16')) r(c);
@@ -42,12 +43,16 @@ INSERT INTO project_ports (id,project_id,name,container_port,protocol,host_port)
  ('00000000-0000-0000-0000-0000000000e6','00000000-0000-0000-0000-0000000000c1','flaky',11,'tcp',55410),
  ('00000000-0000-0000-0000-0000000000e7','00000000-0000-0000-0000-0000000000c1','hot',12,'tcp',55411),
  ('00000000-0000-0000-0000-0000000000e8','00000000-0000-0000-0000-0000000000c1','sshdeny',2224,'tcp',55424),
- ('00000000-0000-0000-0000-0000000000e9','00000000-0000-0000-0000-0000000000c1','churn',13,'tcp',55412);
+ ('00000000-0000-0000-0000-0000000000e9','00000000-0000-0000-0000-0000000000c1','churn',13,'tcp',55412),
+ ('00000000-0000-0000-0000-0000000000ea','00000000-0000-0000-0000-0000000000c1','udpecho',53,'udp',55620),
+ ('00000000-0000-0000-0000-0000000000eb','00000000-0000-0000-0000-0000000000c1','udpdeny',54,'udp',55621);
 INSERT INTO project_ports (project_id,name,container_port,protocol,host_port)
  SELECT '00000000-0000-0000-0000-0000000000c1', 'idle'||lpad(i::text,2,'0'), 100+i, 'tcp', 55500+i FROM generate_series(0,9) i;
 INSERT INTO project_port_rules (port_id,cidr)
  SELECT p.id, c FROM project_ports p, (VALUES ('127.0.0.0/8'),('::1/128'),('172.16.0.0/12'),('10.0.0.0/8'),('192.168.0.0/16')) r(c)
- WHERE p.project_id='00000000-0000-0000-0000-0000000000c1' AND p.name NOT IN ('echodeny','sshdeny');
+ WHERE p.project_id='00000000-0000-0000-0000-0000000000c1' AND p.name NOT IN ('echodeny','sshdeny','udpecho','udpdeny');
+INSERT INTO project_port_rules (port_id,cidr,protocol) SELECT '00000000-0000-0000-0000-0000000000ea', c, 'udp' FROM (VALUES ('127.0.0.0/8'),('::1/128'),('172.16.0.0/12')) r(c);
+INSERT INTO project_port_rules (port_id,cidr,protocol) VALUES ('00000000-0000-0000-0000-0000000000eb','203.0.113.0/24','udp');
 INSERT INTO project_port_rules (port_id,cidr) VALUES ('00000000-0000-0000-0000-0000000000e4','203.0.113.0/24'),('00000000-0000-0000-0000-0000000000e8','203.0.113.0/24');
 SQL
 echo seeded

@@ -508,6 +508,6 @@ func sshDocExample() {
 	args = append(args, sshOpts...)
 	args = append(args, "-i", sshKey, "whoami")
 	out, code := run(cmdOpts{Env: cliEnv(C.CapOK), Timeout: 30 * time.Second}, capsuleBin(), args...)
-	check("matrix", "ssh-doc", "capsule ssh (exec)", "v4", "cap_", "documented form `capsule ssh p/s -l u -- -i key <command>` runs the command", fmt.Sprintf("exit=%d %s", code, trunc(out, 110)), code == 0 && strings.Contains(out, "interop-ssh"),
+	check("matrix", "ssh-doc", "capsule ssh (exec)", "v4", "cap_ + remote command after --", "documented form `capsule ssh p/s -l u -- -i key <command>` runs the command", fmt.Sprintf("exit=%d %s", code, trunc(out, 110)), code == 0 && strings.Contains(out, "interop-ssh"),
 		"DEFECT cli/cmd/capsule/sshcmd.go sshArgs: extra args are placed before the alias, so a trailing command is taken as the host name")
 }

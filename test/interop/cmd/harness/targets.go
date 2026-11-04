@@ -247,3 +247,24 @@ func makeSSHKey(dir string) (keyPath string, err error) {
 	sshAuthorized = k
 	return keyPath, nil
 }
+
+// UDP echo destinations (127.0.0.1:55620 for udpecho, :55621 for udpdeny).
+func startUDPTargets() error {
+	for _, p := range []int{55620, 55621} {
+		pc, err := net.ListenPacket("udp", fmt.Sprintf("127.0.0.1:%d", p))
+		if err != nil {
+			return err
+		}
+		go func(pc net.PacketConn) {
+			buf := make([]byte, 4096)
+			for {
+				n, a, err := pc.ReadFrom(buf)
+				if err != nil {
+					return
+				}
+				pc.WriteTo(buf[:n], a)
+			}
+		}(pc)
+	}
+	return nil
+}

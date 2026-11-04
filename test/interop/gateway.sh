@@ -9,9 +9,9 @@ start)
   mkdir -p "$W/run"
   keys=""
   if [ "${CGC:-local}" != none ]; then
-    kj=$(curl -s -H "X-Gateway-Secret: interop-gw-secret-do-not-use" http://127.0.0.1:18080/internal/gateway/keys)
-    kid=$(echo "$kj" | grep -o "\"kid\":\"[^\"]*\"" | head -1 | cut -d\" -f4); x=$(echo "$kj" | grep -o "\"x\":\"[^\"]*\"" | head -1 | cut -d\" -f4)
-    [ -n "$x" ] && keys="$kid=$x"
+    kj=$(curl -s -m 3 -H "X-Gateway-Secret: interop-gw-secret-do-not-use" http://127.0.0.1:18080/internal/gateway/keys || true)
+    kid=$(echo "$kj" | grep -o "\"kid\":\"[^\"]*\"" | head -1 | cut -d\" -f4 || true); x=$(echo "$kj" | grep -o "\"x\":\"[^\"]*\"" | head -1 | cut -d\" -f4 || true)
+    if [ -n "$x" ]; then keys="$kid=$x"; echo "$keys" > "$W/run/cgc.keys"; elif [ -f "$W/run/cgc.keys" ]; then keys=$(cat "$W/run/cgc.keys"); fi
   fi
   nohup env -i PATH=/usr/bin:/bin HOME="$W" \
     CAPSULE_GW_LISTEN="${GW_LISTEN:-0.0.0.0:18443,[::]:18443}" CAPSULE_GW_ZONE=interop.test CAPSULE_GW_CONTROL_URL=http://127.0.0.1:18080 \

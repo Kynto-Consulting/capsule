@@ -123,9 +123,17 @@ func runOracle(cases []dcase) ([]jsRes, error) {
 	}
 	win, _ := sh("wslpath -w '" + in + "'")
 	win = strings.TrimSpace(win)
-	out, code := run(cmdOpts{Timeout: 120 * time.Second}, nodeExe, filepath.Join(winDir(), "js", "oracle.mjs"), win)
+	var out string
+	var code int
+	for try := 0; try < 3; try++ {
+		out, code = run(cmdOpts{Timeout: 120 * time.Second}, nodeExe, filepath.Join(winDir(), "js", "oracle.mjs"), win)
+		if code == 0 {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
 	if code != 0 {
-		return nil, fmt.Errorf("oracle node exit %d: %s", code, trunc(out, 300))
+		return nil, fmt.Errorf("oracle node exit %d: %s", code, trunc(out[maxInt(0, len(out)-500):], 500))
 	}
 	var res []jsRes
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &res); err != nil {
@@ -444,6 +452,11 @@ func codecBigPadding() {
 		}
 		hexes = append(hexes, hex.EncodeToString(b))
 		cs = append(cs, dcase{Kind: "decReq", Hex: hex.EncodeToString(b), EOF: true})
+	}
+	if len(cs) == 0 {
+		_, ge := gw.EncodeRequest(gw.Request{Transport: 1, Project: "shop", Service: "pg", AuthType: 1, Auth: "cap_" + strings.Repeat("a", 40), Padding: 300})
+		check("codec", "big-padding", "Go lib", "-", "-", "Padding > 255 rejected like the JS library and the gateway encoder (H5 fixed)", errStr(ge), ge != nil, "")
+		return
 	}
 	js, err := runOracle(cs)
 	if err != nil {

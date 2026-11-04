@@ -520,7 +520,7 @@ route_id: {type: string, format: uuid, description: 'Ruta por la que sale el pue
         credential_type: {type: string, enum: [cap, cgs, cgc, cgt, none]}
         port: {type: integer, description: "Puerto arrendado cuando access = random_port."}
         credential: {type: string, description: 'Token tal cual; nunca se registra, solo su id/jti.'}
-        # credential_type `none` solo es valido con access `random_port`: se decide por lease vigente del puerto `port`, rango del pool y lista de IP del servicio (lista vacia o inexistente DENIEGA, aunque el proyecto sea publico). Cualquier otro uso de `none` es unauthorized. cache_ttl_seconds <= 30.
+        # credential_type `none` solo es valido con access `sni_name` (ruta existente con acceso gateway habilitado + lista de IP del servicio; lista vacia o inexistente DENIEGA; principal `sni:<servicio>`) o `random_port`: se decide por lease vigente del puerto `port`, rango del pool y lista de IP del servicio (lista vacia o inexistente DENIEGA, aunque el proyecto sea publico). Cualquier otro uso de `none` es unauthorized. cache_ttl_seconds <= 30.
         access: {type: string, enum: [sni_name, capsule_uri, random_port]}
     AuthorizeResponse:
       type: object

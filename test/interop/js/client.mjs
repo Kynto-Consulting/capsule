@@ -116,6 +116,18 @@ try {
     const data = pattern(1024, 7); const r = new Reader(s); s.write(data); const back = await r.need(1024);
     s.destroy();
     out({ ok: true, same: Buffer.compare(back, data) === 0, ms: Date.now() - t0 });
+  } else if (a.mode === "udp") {
+    const u = await lib.connectUdp(a.uri, opts({ retry: false }));
+    let got = 0, same = 0; const waiters = [];
+    u.on("message", (d) => { got++; const w = waiters.shift(); if (w) w(Buffer.from(d)); });
+    for (let i = 0; i < a.n; i++) {
+      const msg = Buffer.from(`udp-dgram-${i}-` + "x".repeat(i % 200));
+      const p = new Promise((res) => { waiters.push(res); setTimeout(() => res(null), 3000); });
+      u.send(msg); const r = await p;
+      if (r && Buffer.compare(r, msg) === 0) same++;
+    }
+    u.close();
+    out({ ok: true, sent: a.n, same, got, ms: Date.now() - t0 });
   } else {
     out({ ok: false, message: "unknown mode" });
   }

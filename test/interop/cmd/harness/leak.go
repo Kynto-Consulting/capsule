@@ -29,9 +29,9 @@ func phaseLeak() {
 	noteSecret("backend secret key", "interop-secret-key-0123456789abcdef0123")
 	noteSecret("signing seed", "interop-signing-seed-0123456789!")
 
-	audit := psqlCtl("select action||' '||coalesce(ip::text,'')||' '||coalesce(metadata::text,'') from audit_logs where action like 'gateway.%'")
+	audit := psqlCtl("select action||' '||coalesce(ip_address::text,'')||' '||coalesce(metadata::text,'') from audit_logs where action like 'gateway.%'")
 	files := map[string]string{"audit_logs (gateway.*)": audit}
-	for _, n := range []string{"server.log", "gateway.log", "gwnew.log", "gwcache.log", "gwstd.log"} {
+	for _, n := range []string{"server.log", "gateway.log", "gwnew.log", "gwcache.log", "gwstd.log", "gwnokeys.log"} {
 		if b, err := os.ReadFile(filepath.Join(C.W, n)); err == nil {
 			files[n] = string(b)
 		}
@@ -69,6 +69,6 @@ func phaseLeak() {
 	allowCap := strings.Contains(rows, "gateway.connect.allow|cap") && strings.Contains(rows, "gateway.connect.allow|cgs") && strings.Contains(rows, "gateway.connect.allow|cgc")
 	denyKinds := strings.Contains(rows, "gateway.connect.deny") && strings.Contains(rows, "unauthorized") && strings.Contains(rows, "ip_denied")
 	check("leak", "", "audit trail in the database", "-", "-", "allow rows for cap, cgs and cgc; deny rows for unauthorized and ip_denied", strings.ReplaceAll(rows, "\n", " ; "), allowCap && denyKinds, "")
-	noIP := psqlCtl("select count(*) from audit_logs where action like 'gateway.connect.%' and (ip is null or ip::text = '')")
+	noIP := psqlCtl("select count(*) from audit_logs where action like 'gateway.connect.%' and (ip_address is null or ip_address::text = '')")
 	check("leak", "", "audit trail in the database", "-", "-", "every connection row carries the source IP", "rows without ip: "+noIP, noIP == "0", "")
 }

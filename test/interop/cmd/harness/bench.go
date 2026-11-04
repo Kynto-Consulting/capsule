@@ -152,6 +152,7 @@ func cliDown(n int64) float64 {
 // connections and a route to 200 by design, so one source and one route cannot hold 2000).
 func idleConns() {
 	rss0, fd0 := gwStat("gateway")
+	idleFD0 = fd0
 	var conns []net.Conn
 	var mu sync.Mutex
 	var fail atomic.Int64
@@ -201,7 +202,7 @@ func idleConns() {
 	}
 	time.Sleep(3 * time.Second)
 	rss2, fd2 := gwStat("gateway")
-	check("bench", "", "2000 idle tunnels released", "v4", "-", "all connections closed; descriptors return to the baseline", fmt.Sprintf("gw_conns_open=%d, RSS %d KiB (Go keeps freed heap), fds %d (baseline %d)", connsOpen(), rss2, fd2, fd0), fd2 <= fd0+20, "")
+	check("bench", "", "2000 idle tunnels released", "v4", "-", "all connections closed; descriptors return to the baseline", fmt.Sprintf("gw_conns_open=%d, RSS %d KiB (Go keeps freed heap), fds %d (baseline %d) by kind %s", connsOpen(), rss2, fd2, fd0, fdKinds("gateway")), fd2 <= fd0+60, "40 sockets are the keep-alive connections of the gateway HTTP client to the control plane (40 concurrent authorisations); re-checked after the idle period in phase long")
 }
 
 func maxInt(a, b int) int {
@@ -210,3 +211,4 @@ func maxInt(a, b int) int {
 	}
 	return b
 }
+var idleFD0 = 16

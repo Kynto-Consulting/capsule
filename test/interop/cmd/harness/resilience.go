@@ -72,7 +72,7 @@ func startLong() {
 				return
 			case <-time.After(20 * time.Second):
 			}
-			msg := []byte(fmt.Sprintf("long-%010d", i))
+			msg := []byte(fmt.Sprintf("long-%011d", i))
 			c.SetDeadline(time.Now().Add(15 * time.Second))
 			if _, err := c.Write(msg); err != nil {
 				long.tunnelErr.Store(err.Error())
@@ -172,14 +172,17 @@ func phaseLong() {
 	e, _ := long.tunnelErr.Load().(string)
 	check("long", "", "Go lib tunnel", "v4", "cap_", ">= 10 min alive, every 20 s probe echoed", fmt.Sprintf("alive=%v probes=%d err=%s lived=%s", alive, long.tunnelOK.Load(), e, age.Round(time.Second)), alive && e == "" && long.tunnelOK.Load() >= 25 && age >= 10*time.Minute, "")
 	long.tunnel.Close()
+	_, fdNow := gwStat("gateway")
+	_ = fdNow
 	rev := routeRev()
+	fdBaselineCheck(idleFD0)
 	check("long", "", "route reloads during the sessions", "-", "-", ">= 10 table revisions seen by the gateway while they lived", fmt.Sprintf("gw_route_rev %d -> %d (%d enable/disable toggles)", long.revFirst, rev, long.toggles.Load()), rev-long.revFirst >= 10, "")
 }
 
 // ---- resilience ----
 
 func routesSnapshot() (rev int64, n int) {
-	st, b, _ := internal("GET", "/internal/gateway/routes?since=-1&wait=0")
+	st, b, _ := internal("GET", "/internal/gateway/routes?wait=0")
 	if st != 200 {
 		return -1, 0
 	}
@@ -253,7 +256,7 @@ func phaseResilience() {
 	up = time.Since(tPatch)
 	wg.Wait()
 	rev1, n1 := routesSnapshot()
-	check("resilience", "", "hot route add", "v4", "cap_", "service enabled -> route effective in the gateway in < 5 s", fmt.Sprintf("PATCH=%d, before: %s; effective after %d ms (ok=%v); routes %d -> %d, rev %d -> %d", st, trunc(errStr(beforeErr), 40), up.Milliseconds(), okUp, n0, n1, rev0, rev1), st == 200 && okUp && up < 5*time.Second && beforeErr != nil && rev1 > rev0 && n1 == n0+1, "")
+	check("resilience", "", "hot route add", "v4", "cap_", "service enabled -> route effective in the gateway in < 5 s", fmt.Sprintf("PATCH=%d, before: %s; effective after %d ms (ok=%v); routes %d -> %d, rev %d -> %d", st, trunc(errStr(beforeErr), 30), up.Milliseconds(), okUp, n0, n1, rev0, rev1), st == 200 && okUp && up < 5*time.Second && beforeErr != nil && rev1 > rev0 && n1 == n0+1, "")
 	check("resilience", "", "route long-poll", "-", "-", "GET /internal/gateway/routes?since=<rev> answers at the change, not at the timeout", fmt.Sprintf("woke %d ms after the change, rev %d (wait was 25 s)", wakeMs.Load(), wakeRev.Load()), wakeMs.Load() >= 0 && wakeMs.Load() < 3000 && wakeRev.Load() > rev0, "")
 	t1 := time.Now()
 	stt, bb, _ := internal("GET", fmt.Sprintf("/internal/gateway/routes?since=%d&wait=3", rev1))
@@ -286,7 +289,7 @@ func phaseResilience() {
 	out, code := gwctl("start", "GW_NAME=gwcache", "GW_ADMIN=127.0.0.1:19105", "GW_LISTEN=127.0.0.1:18490")
 	_, cr := adminGet("127.0.0.1:19105", "/readyz")
 	_, nr := adminMetricAt("127.0.0.1:19105", "gw_routes")
-	check("resilience", "", "gateway restart, control down", "-", "-", "a new gateway process serves the table of its cache file", fmt.Sprintf("start code=%d (%s) /readyz=%s routes=%.0f", code, trunc(out, 50), trunc(cr, 30), nr), code == 0 && nr > 5, "")
+	check("resilience", "", "gateway restart, control down", "-", "-", "a new gateway process serves the table of its cache file", fmt.Sprintf("start code=%d (%s) /readyz=%s routes=%.0f log: %s", code, trunc(out, 50), trunc(cr, 30), nr, lastLogLines("gwcache.log", 3)), code == 0 && nr > 5, "")
 	gwctl("stop", "GW_NAME=gwcache")
 	ctl("start")
 	tBack := time.Now()
@@ -296,7 +299,7 @@ func phaseResilience() {
 
 	// --- R3 certificates by SIGHUP
 	serial := func() string {
-		o, _ := sh(fmt.Sprintf("echo | openssl s_client -connect 127.0.0.1:%d -servername tcp.interop.test 2>/dev/null | openssl x509 -noout -serial -ext subjectAltName 2>/dev/null | tr '\\n' ' '", C.GW))
+		o, _ := sh(fmt.Sprintf("echo | openssl s_client -connect 127.0.0.1:%d -servername tcp.interop.test -alpn capsule/1 2>/dev/null | openssl x509 -noout -serial -ext subjectAltName 2>/dev/null | tr '\\n' ' '", C.GW))
 		return strings.TrimSpace(o)
 	}
 	s0 := serial()
@@ -315,7 +318,7 @@ func phaseResilience() {
 		_, e := io.ReadFull(hold, hb)
 		holdOK = e == nil && string(hb) == "cert-reload-ok"
 	}
-	check("resilience", "", "SIGHUP certificate reload", "v4", "-", "new certificate served, open connection unaffected, new connections verify", fmt.Sprintf("served cert changed=%v; open conn ok=%v; Go new conn err=%v; JS ok=%v", s0 != s1 && s1 != "", holdOK, opened, jsOpen.ok()), s0 != s1 && s1 != "" && holdOK && opened == nil && jsOpen.ok(), trunc(s1, 90))
+	check("resilience", "", "SIGHUP certificate reload", "v4", "-", "new certificate served, open connection unaffected, new connections verify", fmt.Sprintf("served cert changed=%v; open conn ok=%v; Go new conn err=%v; JS ok=%v; before=[%s] after=[%s]", s0 != s1 && s1 != "", holdOK, opened, jsOpen.ok(), trunc(s0, 70), trunc(s1, 70)), s0 != s1 && s1 != "" && holdOK && opened == nil && jsOpen.ok(), trunc(s1, 90))
 	// a broken file must not take the gateway down: the previous certificate stays
 	sh(fmt.Sprintf("cd %s/certs && cp gw.crt gw.crt.good && echo garbage > gw.crt", C.W))
 	gwctl("reload")
@@ -393,3 +396,43 @@ func phaseDrain() {
 }
 
 func atoi(s string) int { n, _ := strconv.Atoi(strings.TrimSpace(s)); return n }
+
+// fdKinds counts the descriptors of a gateway process by kind (socket, pipe, anon_inode, file).
+func fdKinds(name string) string {
+	pid, _ := os.ReadFile(filepath.Join(C.W, "run", name+".pid"))
+	p := strings.TrimSpace(string(pid))
+	ents, _ := os.ReadDir("/proc/" + p + "/fd")
+	k := map[string]int{}
+	for _, e := range ents {
+		t, err := os.Readlink("/proc/" + p + "/fd/" + e.Name())
+		if err != nil {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(t, "socket:"):
+			k["socket"]++
+		case strings.HasPrefix(t, "pipe:"):
+			k["pipe"]++
+		case strings.HasPrefix(t, "anon_inode:"):
+			k["anon_inode"]++
+		default:
+			k["file"]++
+		}
+	}
+	return fmt.Sprint(k)
+}
+
+func lastLogLines(name string, n int) string {
+	b, _ := os.ReadFile(filepath.Join(C.W, name))
+	l := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(l) > n {
+		l = l[len(l)-n:]
+	}
+	return strings.Join(l, " // ")
+}
+
+// after the 10 minute wait: the gateway holds no descriptors of finished connections
+func fdBaselineCheck(fd0 int) {
+	rss, fd := gwStat("gateway")
+	check("long", "", "descriptors after idle", "-", "-", "descriptors of finished connections are released (the 2000-tunnel burst left 40 keep-alive sockets to the control plane)", fmt.Sprintf("fds %d (baseline with the long sessions open %d), gw_conns_open=%d, RSS %d KiB, by kind %s", fd, fd0, connsOpen(), rss, fdKinds("gateway")), fd <= fd0+4, "")
+}

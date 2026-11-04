@@ -138,6 +138,7 @@ func phaseInterop() {
 		}
 		sigs[key][impl] = r
 	}
+	detectRelay()
 	sizes := []struct {
 		name string
 		n    int
@@ -151,6 +152,10 @@ func phaseInterop() {
 				tok := C.CapOK
 				if im.n == "capsule connect" {
 					tok = cgsAll
+				}
+				if im.n == "JS lib" && fam == "v6" && relayBreaksHalfClose {
+					rec(Res{Phase: "interop", Client: im.n, Family: fam, Cred: "cap_/cgs_", Expect: sz.name, Got: "-", Status: "NA", Note: "the Windows<->WSL relay breaks half-close on ::1 (see the relay diagnostic); verified over IPv4"})
+					continue
 				}
 				r := im.f(fam, sz.n, "echo", tok)
 				record(sz.name+"|"+fam, im.n, r)

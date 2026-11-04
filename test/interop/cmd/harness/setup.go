@@ -77,6 +77,7 @@ func phaseSetup() {
 	sshKey, err = makeSSHKey(filepath.Join(C.W, "run"))
 	must(err, "ssh key")
 	must(startTargets(), "targets")
+	must(startUDPTargets(), "udp targets")
 
 	// the control plane mirrors the seeded database and ports as services; enable the gateway access of each
 	st, b := api("GET", "/services", C.CapOK, nil)

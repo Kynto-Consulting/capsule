@@ -277,3 +277,46 @@ func startBg(bin string, env []string, args ...string) func() {
 		tr(bin+" (background) output", buf.Bytes())
 	}
 }
+
+func postInternal(path string, body any) (int, string) {
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", "http://127.0.0.1:18080"+path, bytes.NewReader(b))
+	req.Header.Set("X-Gateway-Secret", C.Secret)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := hc.Do(req)
+	if err != nil {
+		return 0, err.Error()
+	}
+	defer resp.Body.Close()
+	rb, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, strings.TrimSpace(string(rb))
+}
+
+// rawAPI calls any backend path as Host localhost (the platform host), optionally with a bearer token.
+func rawAPI(method, path, tok string, body any) (int, []byte) {
+	var rd io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rd = bytes.NewReader(b)
+	}
+	req, _ := http.NewRequest(method, "http://localhost:18080"+path, rd)
+	if tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return 0, []byte(err.Error())
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, b
+}
+
+// psqlExec runs SQL on the control database without a shell (values may contain $ and quotes).
+func psqlExec(sql string) string {
+	out, _ := run(cmdOpts{Env: append(os.Environ(), "PGPASSWORD=interop-pg-pass")}, "psql", "-h", "127.0.0.1", "-p", "55440", "-U", "postgres", "-d", "capsule", "-At", "-c", sql)
+	return strings.TrimSpace(out)
+}

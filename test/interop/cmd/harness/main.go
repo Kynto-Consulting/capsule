@@ -13,7 +13,7 @@ func main() {
 	initCfg()
 	phases := os.Args[1:]
 	if len(phases) == 0 || phases[0] == "all" {
-		phases = []string{"setup", "codec", "matrix", "interop", "resilience", "bench", "long", "drain", "leak", "accept"}
+		phases = []string{"setup", "codec", "matrix", "interop", "resilience", "second", "bench", "long", "drain", "leak", "accept"}
 	}
 	start := time.Now()
 	startTime = start
@@ -32,6 +32,10 @@ func main() {
 			phaseResilience()
 		case "bench":
 			phaseBench()
+		case "relay":
+			phaseRelay()
+		case "second":
+			phaseSecond()
 		case "long":
 			phaseLong()
 		case "drain":

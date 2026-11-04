@@ -9,9 +9,9 @@ start)
   nohup env -i PATH=/usr/bin:/bin HOME="$W" \
     DATABASE_URL="postgres://postgres:interop-pg-pass@127.0.0.1:55440/capsule?sslmode=disable" \
     CAPSULE_SECRET_KEY=interop-secret-key-0123456789abcdef0123 CAPSULE_ENV=development CAPSULE_PORT=18080 CAPSULE_LOG_LEVEL=info \
-    REDIS_URL=redis://127.0.0.1:1/0 AWS_EC2_METADATA_DISABLED=true AWS_DEFAULT_REGION=us-east-1 \
+    CAPSULE_TCP_HOST=tcp.interop.test REDIS_URL=redis://127.0.0.1:1/0 AWS_EC2_METADATA_DISABLED=true AWS_DEFAULT_REGION=us-east-1 \
     CAPSULE_GW_SECRET=interop-gw-secret-do-not-use CAPSULE_GW_ZONE=interop.test CAPSULE_GW_DEST_HOST=127.0.0.1 \
-    CAPSULE_GW_POOL=off CAPSULE_GW_SIGNING_KEY="$SEED" CAPSULE_GW_POLL_UNUSED=1 \
+    CAPSULE_GW_POOL=20000-20019 CAPSULE_GW_SIGNING_KEY="$SEED" CAPSULE_GW_POLL_UNUSED=1 \
     "$HERE/bin/capsule-server" > "$W/server.log" 2>&1 &
   echo $! > "$W/run/server.pid"
   for i in $(seq 1 60); do [ "$(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:18080/health)" != 000 ] && { echo started; exit 0; }; sleep 0.5; done
