@@ -1,16 +1,16 @@
-# Puertos TCP extra y lista de IPs de la app
+# Puertos TCP/UDP extra y lista de IPs de la app
 
 Dos controles distintos, ambos por proyecto y sin Terraform:
 
 | Control | Qué decide | Comandos |
 |---|---|---|
-| **Puertos TCP extra** | quién puede conectar a un puerto TCP publicado de la app (además de HTTPS) | `capsule ports ...` |
+| **Puertos extra (TCP o UDP)** | quién puede conectar a un puerto publicado de la app (además de HTTPS) | `capsule ports ...` |
 | **Lista de IPs de la app** (`network`) | quién puede abrir la app en el navegador | `capsule network ...` |
 
 Las bases de datos tienen su propio control: `bases-acceso-externo.md`. Todos los CIDR aceptan IPv4 e IPv6
 (`ipv6.md`). Un token `deploy` no puede usar ninguno de estos comandos (403).
 
-## a) Puertos TCP extra (`capsule ports`)
+## a) Puertos extra (`capsule ports`)
 
 Los puertos son **privados por defecto** (nadie conecta hasta que permitas IPs). Cada cambio **reinicia el
 contenedor** y el backend asigna un puerto de host estable (rango 41000-41999).
@@ -23,6 +23,8 @@ capsule ports add --container 9000                           # privado: nadie co
 capsule ports access add 5432 --my-ip --desc "portátil"      # permitir más IPs a un puerto existente
 capsule ports access remove 5432 <id-regla|cidr>
 capsule ports remove --container 9000                        # pide confirmación (-y)
+capsule ports add --container 7777 --udp --name game --my-ip   # UDP (= --protocol udp); en el código, sin desplegar
+capsule ports list --udp                                     # filtra por protocolo; la columna PROTO dice tcp/udp
 ```
 
 Reglas:
@@ -32,6 +34,17 @@ Reglas:
 - Prefiere `--my-ip`. Con VPN/WARP la IP rota: vuelve a ejecutar `--my-ip`, no amplíes el rango.
 - Tras cambiar: `capsule ports list` y prueba (`nc -zv host puerto`). Recuerda que se reinició el contenedor:
   avisa al usuario antes en producción.
+
+- **UDP**: el mismo número puede existir en tcp **y** en udp. `ports access add|remove` y `ports remove` también
+  aceptan `--udp`/`--protocol udp`; **sin el flag actúan sobre el TCP**. Reglas del firewall con `IpProtocol` udp;
+  máximo 25 reglas por (puerto, protocolo). Estado: en el código, migración 000064 sin aplicar en producción
+  (`udp-ipv6.md`).
+- **Camino**: el puerto directo es el método **secundario**; el gateway (`capsule connect proyecto/servicio`,
+  `gateway.md`) es el primario cuando esté desplegado. Un servicio del gateway se llama como el **nombre** del puerto
+  (`--name`): ponle un nombre claro (`pg`, `game`) porque será el `<servicio>` del URI.
+- **Puerto aleatorio (20000-29999)**: respaldo del gateway, sin token; solo manda la lista de IP del servicio y
+  **vacía deniega**. No se gestiona con `capsule ports`, sino con `capsule api POST .../gateway/services/<svc>/port`
+  (`gateway.md`). Máximo de cuotas por proyecto/organización (`409 port_quota_exceeded`).
 
 ## b) Lista de IPs de la app (`capsule network`)
 

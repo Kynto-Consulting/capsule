@@ -4,15 +4,16 @@ Esta referencia separa lo que funciona hoy de lo planificado. Si algo no está e
 
 ## Funciona hoy en producción
 
-- **Backend y frontend desplegados el 2026-11-03**, con migraciones hasta la **000059** (`cidr_ipv6`).
+- **Backend y frontend desplegados el 2026-11-03**, con migraciones hasta la **000059** (`cidr_ipv6`); las 000060-000064 (gateway, UDP) NO están aplicadas.
 - **Forgejo en `git.tumi-ai.com`** con **login OIDC por Capsule** (cliente first-party, sin pantalla de
   consentimiento; los grupos viajan en el claim `groups`: `org:<slug>`, `org:<slug>:<rol>`,
   `project:<org>/<project>:<rol>`).
 - **Clone, push y pull por HTTPS verificados** (token `cgt_` validado en el borde por `/internal/git-auth`; el
   repo se autentica como el usuario de Forgejo correspondiente).
+- **SSH de administración del host en el puerto 2200** (no es asunto de un agente); SSH de Git se anuncia en `:22`. DNS A de `git` y `db` existentes.
 - Roles viewer/deployer/admin proyectados a equipos de Forgejo; repo `ORG/PROJECT` aprovisionado al crear el
   proyecto (con reintento y estado visible en `capsule git repo view`).
-- CLI 0.7.3 con todos los grupos de `capsule --help`: deploy, vars/env, ci, workflow, runs, git, pr, branch,
+- CLI con los grupos (los comandos `connect`, `tunnel` y `ssh` existen en el binario pero no tienen gateway en producción, ver abajo) de `capsule --help`: deploy, vars/env, ci, workflow, runs, git, pr, branch,
   security, environments, promote, approvals, webhooks, audit, notifications, recover, backups, ports, db access,
   network, connections, members, oauth, tokens, api, alias.
 - Informe de conexiones internas (`capsule connections`, `deploy --strict-connections`), IPv6 **a nivel de código**
@@ -37,29 +38,29 @@ Esta referencia separa lo que funciona hoy de lo planificado. Si algo no está e
 
 ## Lo que NO existe todavía
 
-### Gateway universal: SOLO PLANIFICADO (`docs/gateway/PLAN.md`; "no hay código de producto")
+### Gateway universal: en el código, NO desplegado (`docs/gateway/PLAN.md`, `PROTOCOL.md`)
 
-Nada de lo siguiente existe; no lo ejecutes ni lo ofrezcas como disponible:
+| Pieza | Estado |
+|---|---|
+| `capsule connect/tunnel/ssh`, `--listen`, `--stdio`, `--exec`, ProxyCommand SSH | **en el código** |
+| URI `capsule://<proyecto>/<servicio>`, host `tcp.<zona>`/`udp.<zona>`, protocolo `capsule/1` | **en el código** (norma + vectores de prueba) |
+| Librerías `cli/pkg/gatewayclient` (Go) y `packages/gateway-js` (`@kyntocg/capsule-gateway`) | **en el código** |
+| API: servicios, `connection-info`, `connection-token` (`cgc_`), tokens `cgs_`, puerto aleatorio 20000-29999 (`409 port_pool_exhausted`/`port_quota_exceeded`), política de org `warn\|error`, acción `project.connect` | **en el código** (migraciones 000060-000062) |
+| Puertos UDP directos (`ports add --udp`, columna PROTO) y UDP por túnel | **en el código** (migración 000064) |
+| Informe de conexiones internas | **desplegado** |
+| **Despliegue** del servicio `capsule-gateway` y migraciones 000060-000064 | **NO desplegado**: producción está en la 000059 |
+| Certificado comodín DNS-01 y toma del 443 | planificado |
+| MySQL/Redis/Mongo por SNI en el puerto estándar | planificado |
+| QUIC/WebTransport (`transport=3` -> `0x0109`) | planificado |
+| `capsule-agent` (salida) y dominios personalizados | planificado |
 
-- Servicio `capsule-gateway` (gateway propio en Go; Caddy se quedaría para HTTP).
-- Acceso a bases **por nombre y SNI en el puerto estándar** (`psql "host=mi-proyecto.db.tumi-ai.com"`), y
-  nombres `*.db` por proyecto.
-- URIs `capsule://<proyecto>/<servicio>`, comandos `capsule connect`, `capsule tunnel`, `capsule ssh`, y el túnel
-  TLS con encabezado de enrutamiento `capsule/1` hacia `tcp.apps.tumi-ai.com:443` (SSH, RDP, Minecraft, TCP
-  arbitrario).
-- UDP por el túnel, QUIC/WebTransport, librerías cliente Go/JS.
-- Pool de puertos aleatorios con arrendamiento (lease) como respaldo.
-- Cambio de "método primario": hoy el acceso externo a bases es **directo** (puertos 40000-40199 con TLS y lista de
-  IPs) y los puertos TCP extra son 41000-41999.
-- Lo medido en `docs/gateway/spikes/` son experimentos de viabilidad, no producto.
-
-El único trozo "del gateway" ya construido es el **informe de conexiones internas** del deploy (`capsule connections`),
-que detecta conexiones que se saltarían un gateway futuro.
+El navegador no puede abrir TCP crudo. Hasta el despliegue, el acceso externo a bases es **directo**
+(`db.tumi-ai.com:40000-40199`, TLS, lista de IPs) y los puertos extra son 41000-41999. Lo medido en
+`docs/gateway/spikes/` son experimentos de viabilidad. Ver `gateway.md`.
 
 ### Red y plataforma
 
-- **IPv6 de cara a Internet**: sin activar (`ipv6_enabled` de Terraform no aplicado; falta Docker IPv6 y `AAAA`).
-  Una regla IPv6 se guarda pero nadie llega por IPv6 todavía.
+- **IPv6 de cara a Internet**: la red de AWS (VPC, ALB dualstack, IPv6 de la instancia) ya está aplicada; falta confirmar `AAAA` en DNS y Docker IPv6 en el host (ver `ipv6.md`).
 - Variables con scope **`build`** aplicadas a la construcción (solo `runtime` y `both` se inyectan).
 - Rate limiting por /64 en IPv6 (hoy por /128).
 - Estado de Terraform remoto (hoy local en `deploy/terraform`; backend S3 preparado y sin activar).

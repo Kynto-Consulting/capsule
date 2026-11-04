@@ -5,10 +5,12 @@ la app se conecta a servidores internos **sin pasar por el gateway**: puertos di
 Docker, nombres de contenedor, redes privadas o el servicio de metadatos. Son conexiones frágiles (cambian entre
 despliegues) y se saltan la autorización y la auditoría.
 
-> El "método primario" que recomienda el informe es el gateway (`<nombre>.db.tumi-ai.com`,
-> `<app>.apps.tumi-ai.com`). **El gateway universal aún es solo plan** (ver `estado-real.md`): hoy la recomendación
-> es una referencia a futuro y las bases se alcanzan por `db.tumi-ai.com:<puerto>` (`bases-acceso-externo.md`).
-> `<app>.apps.tumi-ai.com` para HTTP sí existe.
+> El "método primario" que recomienda el informe es el gateway. **El informe está desplegado; el gateway aún no**
+> (en el código, migraciones 000060-000064 sin aplicar): hoy las bases se alcanzan por `db.tumi-ai.com:<puerto>`
+> (`bases-acceso-externo.md`) y `<app>.apps.tumi-ai.com` para HTTP sí existe. Cómo conectarse con el gateway:
+> `gateway.md` (`capsule connect proyecto/servicio`). La política de organización `gateway_policy` (`warn`|`error`,
+> `capsule api PUT /orgs/$ORG/gateway/policy -f gateway_policy=error`) hará que las conexiones que se saltan el
+> gateway bloqueen el deploy; es decisión del usuario y solo tiene sentido con el gateway desplegado.
 
 ## Usarlo
 

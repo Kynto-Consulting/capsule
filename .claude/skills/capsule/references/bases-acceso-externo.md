@@ -40,8 +40,9 @@ psql "host=db.tumi-ai.com port=40012 dbname=<db> user=<user> sslmode=require"   
 `capsule db access list <db>` y una conexión de prueba real (`psql … -c "select 1"`). Si la conexión se cuelga,
 la IP no está en la lista o la regla aún no se sincronizó con el firewall (espera unos segundos y reintenta).
 
-## Qué NO hay hoy
+## Camino primario (gateway) y qué NO hay hoy
 
-Acceso por nombre estándar `<nombre>.db.tumi-ai.com` en el puerto 5432 con SNI (gateway universal): **solo
-planificado** (`docs/gateway/PLAN.md`). Hoy se conecta por `db.tumi-ai.com:<puerto directo>`. El informe de
-conexiones internas del deploy ya recomienda ese nombre futuro; ver `conexiones-internas.md` y `estado-real.md`.
+El método **primario** es el gateway: `capsule connect proyecto/servicio --listen 127.0.0.1:5433` (`gateway.md`), y
+este acceso directo por `db.tumi-ai.com:<puerto>` es el **secundario**. El gateway está **en el código pero NO
+desplegado**: hoy en producción solo funciona el puerto directo de arriba. No existe (planificado) el nombre
+`<nombre>.db.tumi-ai.com` por SNI en el 5432 ni MySQL/Redis/Mongo por SNI. Ver `estado-real.md`.

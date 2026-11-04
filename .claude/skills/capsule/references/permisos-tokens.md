@@ -57,6 +57,13 @@ Revocar un token en uso puede romper un pipeline: confirma con el usuario.
 Solo valen para **Git por HTTPS**, nunca para la API de Capsule. Se guarda solo el hash; revocar surte efecto en <= 30 s.
 Ver `git-capsule.md`.
 
+## Tokens del gateway (`cgc_`, `cgs_`)
+
+Solo para `capsule connect/tunnel/ssh` y `capsule/1` (`gateway.md`); en el código, sin desplegar. `cgc_` = conexión,
+un solo uso, <= 5 min, lo emite el CLI por intento (permiso `project.connect`: deployer y admin). `cgs_` = servicio
+(agentes/CI), un proyecto y opcionalmente un servicio, expira <= 90 días, se crea con `capsule api POST
+/orgs/$ORG/projects/$PROJ/gateway/service-tokens` (admin) y se muestra una sola vez. Nunca en argv ni en el URI.
+
 ## Clientes OAuth (apps que inician sesión con Capsule)
 
 ```bash

@@ -1,6 +1,6 @@
 # IPv6
 
-Fuente: `docs/ipv6.md`. Resumen para un agente: el **código** ya soporta IPv6; la **red real** no se ha activado.
+Fuente: `docs/ipv6.md`. Resumen para un agente: el **código** ya soporta IPv6; la red de AWS ya tiene IPv6 aplicado (ver abajo).
 
 ## Qué funciona hoy (código)
 
@@ -25,16 +25,17 @@ capsule network allow --my-ip                               # IPv4 o IPv6 según
 
 Si el usuario usa ambas familias, añade las dos explícitamente (`--my-ip` solo detecta una).
 
-## Qué NO funciona hasta cambiar AWS / Docker / DNS
+## Estado de la red (2026-11-03)
 
-El código guarda y envía reglas IPv6 al security group, pero sin los pasos de Terraform (`ipv6_enabled=true`: /56 de
-la VPC, subredes dual-stack, ruta `::/0`, IPv6 en la instancia, ALB `dualstack`), Docker con IPv6 y registros
-`AAAA`, **nadie puede llegar por IPv6**. Esa activación **no se ha ejecutado** (el `terraform plan` no se corrió: la
-sesión de AWS había vencido) y la hace el dueño. Un agente no aplica Terraform ni toca DNS. Si te piden "habilitar
-IPv6", explica que la parte de red es un cambio de infraestructura con plan, aplicación en tandas y reversa (ver
-`docs/ipv6.md` sección 4) y pide al usuario que lo ejecute.
+- **Aplicado en AWS**: VPC con IPv6, ALB `dualstack` e IPv6 en la instancia.
+- **Registros DNS**: constan los **A** de `git` y `db`. No des por hechos los `AAAA` (`git`, `db`, `tcp.`/`udp.` del
+  gateway): compruébalo (`dig AAAA git.tumi-ai.com`) o pregunta al usuario.
+- **Docker con IPv6 en el host** (publicar `[::]`) y la conectividad real de punta a punta por IPv6: verifícalas
+  con el usuario antes de prometer que un cliente IPv6 llega a un puerto o base.
+- Un agente no aplica Terraform ni toca DNS ni Docker del host. Procedimiento y reversa: `docs/ipv6.md` sección 4.
 
-Verificación futura (para el usuario): `curl -6 https://git.tumi-ai.com`, `nc -6 -zv <AAAA> 22`, `dig AAAA …`.
+Verificación (para el usuario): `curl -6 https://git.tumi-ai.com`, `nc -6 -zv <AAAA> 22`, `dig AAAA …`.
+Gateway e IPv6 (`family=`, Happy Eyeballs): `udp-ipv6.md`.
 
 ## Límite conocido
 

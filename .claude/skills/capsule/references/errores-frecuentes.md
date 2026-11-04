@@ -36,6 +36,20 @@ Primero mira el **código de salida** (tabla en `instalacion-login.md`), luego e
 | Alerta `secret` de gitleaks | credencial en el repo | rotarla primero; después `dismiss` solo si es falso positivo |
 | `recover` responde 404/501 | apagado en el servidor (`CAPSULE_RECOVERY_ENABLED`) o no cableado | informar al usuario |
 | Pasos `skipped` en `recover apply` | cambios de infraestructura (Terraform/DNS/RDS) | los hace un operador con `deploy/recovery/recover.sh`; no los intentes |
+| `capsule connect` falla con TLS/`connection refused`/404 en `.../gateway/...` | el gateway no está desplegado (producción en migración 000059) | usar el puerto directo (`bases-acceso-externo.md`); decirlo al usuario |
+| `capsule connect` exit 2 | URI inválido (mayúsculas, `_`, puerto, secreto en el URI), `--exec` sin `-- comando`, `--stdio` con `--listen`, `ssh`/`--stdio` con `?transport=udp` | corregir; `capsule connect --help` |
+| `capsule connect` exit 3 | sin credenciales, token sin prefijo `cap_/cgt_/cgc_/cgs_`, `cgc_` expirado | `capsule login` o `CAPSULE_GATEWAY_TOKEN`; no pegues el token en la línea de comandos |
+| `capsule connect` exit 4 | token inválido, sin `project.connect` (viewer), servicio inexistente o no expuesto, o IP no permitida (el gateway no distingue) | `capsule members list`; `ports access add`/`db access add --my-ip`; que un admin exponga el servicio |
+| `capsule connect` exit 5 | cuota de conexiones/tasa/sesiones UDP del proyecto | esperar y reintentar; cerrar túneles sobrantes |
+| `capsule connect` exit 1 "no disponible" / "cerró sin cierre ordenado" | destino caído, gateway drenando o plano de control caído (falla cerrada) | reintentar; `capsule logs runtime`; no tratar los datos como completos |
+| `0x0203` / token repetido | reutilización de un `cgc_` (es de un solo uso) o nonce repetido | dejar que el CLI pida uno nuevo; no guardar `cgc_` |
+| Con solo sesión de usuario, `connect` da 404 al pedir el token | el CLI llama `/api/v1/projects/...` y el backend monta `/orgs/{org}/projects/...` (aviso de código, sin verificar) | usar un `cgs_` en `CAPSULE_GATEWAY_TOKEN`; informar |
+| `409 port_pool_exhausted` / `port_quota_exceeded` al pedir puerto aleatorio | pool agotado o cuota de proyecto/org | usar `capsule://` (no necesita puerto) o liberar uno (`DELETE .../port`); no reintentar en bucle |
+| El puerto aleatorio no deja pasar a nadie | su lista de IP está vacía: **deniega** | añadir la IP concreta; nunca `0.0.0.0/0` |
+| `ports remove/access` toca el puerto equivocado | mismo número en tcp y udp; sin `--udp` actúa sobre tcp | repetir con `--udp`; verificar con `ports list` (columna PROTO) |
+| `INVALID_PROTOCOL` / `DUPLICATE_PORT` en `ports add` | protocolo distinto de tcp/udp, o (puerto, protocolo) ya publicado | `capsule ports list` |
+| `capsule connect` en npm (WASM) dice que necesita binario nativo | el paquete WASM no abre sockets | instalar el binario nativo o `CAPSULE_NATIVE_BIN` |
+| No llego por IPv6 | AAAA no confirmado, Docker IPv6 del host o regla solo IPv4 | `ipv6.md`; añadir la regla v6 explícita; comprobar con el usuario |
 
 Regla general: si un comando falla y no entiendes por qué, ejecuta `capsule <comando> --help`, `capsule platform` y
 `capsule whoami`, y reporta al usuario el mensaje exacto (sin secretos). No pruebes variaciones al azar sobre
