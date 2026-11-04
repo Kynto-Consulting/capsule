@@ -20,7 +20,7 @@ jobs:
   osv-scanner:
     runs-on: ci
     container:
-      image: ghcr.io/google/osv-scanner:v1.9.2
+      image: ghcr.io/google/osv-scanner:v2.5.1
     steps:
       - name: Checkout
         env:
@@ -28,7 +28,8 @@ jobs:
         run: |
           command -v git >/dev/null || apk add --no-cache git
           host="${GITHUB_SERVER_URL#https://}"
-          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
-          git checkout --force "$GITHUB_SHA"
+          git init -q .
+          git fetch -q --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --force FETCH_HEAD
       - name: osv-scanner (lockfiles, go.mod, requirements)
-        run: osv-scanner scan source --recursive .
+        run: /osv-scanner scan source --recursive .

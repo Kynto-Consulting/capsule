@@ -31,8 +31,9 @@ jobs:
         run: |
           command -v git >/dev/null || apk add --no-cache git
           host="${GITHUB_SERVER_URL#https://}"
-          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
-          git checkout --force "$GITHUB_SHA"
+          git init -q .
+          git fetch -q --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --force FETCH_HEAD
       - name: Paquete SAST (reglas propias y scripts) en version fijada
         env:
           TOKEN: ${{ secrets.SAST_READ_TOKEN }}
@@ -47,7 +48,7 @@ jobs:
         run: |
           # Conjuntos del registro (licencia: Semgrep Rules License v1.0; uso interno permitido, NO se redistribuyen)
           # y reglas propias. --metrics=off: sin telemetria.
-          semgrep scan --metrics=off --json --output /tmp/semgrep.json --error=false \
+          semgrep scan --metrics=off --json --output /tmp/semgrep.json \
             --config p/typescript --config p/javascript --config p/react --config p/nextjs --config p/nodejs \
             --config p/golang --config p/python --config p/dockerfile --config p/terraform \
             --config /tmp/sast/rules \
@@ -69,8 +70,9 @@ jobs:
         run: |
           command -v git >/dev/null || apk add --no-cache git
           host="${GITHUB_SERVER_URL#https://}"
-          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
-          git checkout --force "$GITHUB_SHA"
+          git init -q .
+          git fetch -q --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --force FETCH_HEAD
           git clone --no-tags "https://ci:${SAST_TOKEN}@${host}/${REPO}.git" /tmp/sast
           git -C /tmp/sast checkout --force "$REF"
       - name: gosec (se omite si no hay go.mod)
@@ -93,8 +95,9 @@ jobs:
           REF: ${{ vars.SAST_REF }}
         run: |
           host="${GITHUB_SERVER_URL#https://}"
-          git clone --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" .
-          git checkout --force "$GITHUB_SHA"
+          git init -q .
+          git fetch -q --depth=1 --no-tags "https://ci:${TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --force FETCH_HEAD
           git clone --no-tags "https://ci:${SAST_TOKEN}@${host}/${REPO}.git" /tmp/sast
           git -C /tmp/sast checkout --force "$REF"
       - name: Bandit (se omite si no hay Python)

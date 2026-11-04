@@ -19,7 +19,7 @@ jobs:
   audit:
     runs-on: ci
     container:
-      image: ghcr.io/google/osv-scanner:v1.9.2
+      image: ghcr.io/google/osv-scanner:v2.5.1
     steps:
       - name: Checkout
         env:
@@ -32,9 +32,9 @@ jobs:
         env:
           IMAGES: ${{ vars.AUDIT_IMAGES }}
         run: |
-          osv-scanner scan source --recursive --format json --output /tmp/osv-source.json . || true
+          /osv-scanner scan source --recursive --format json --output /tmp/osv-source.json . || true
           for img in $IMAGES; do
-            osv-scanner scan image --format json --output "/tmp/osv-image-$(echo "$img" | tr '/:' '__').json" "$img" || true
+            /osv-scanner scan image --format json --output "/tmp/osv-image-$(echo "$img" | tr '/:' '__').json" "$img" || true
           done
       - name: Publicar en Git Capsule
         env:

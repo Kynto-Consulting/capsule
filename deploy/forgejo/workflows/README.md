@@ -23,6 +23,19 @@ tag exacto; fijarlas por digest se delega en Renovate (`pinDigests`).
 Pruebas: `bash policy/tests/run-tests.sh` (fixtures `good/` y `bad/`), `bash policy/check-templates.sh` (actionlint + yamllint + pruebas),
 `policy/tests/run-real-runner*.sh` (Forgejo y forgejo-runner reales en Linux/WSL, etiqueta `host`, sin Docker).
 
+## Notas de validacion en el runner real (probado con un proyecto de QA)
+
+- Las plantillas de seguridad corren con el runner `ci` (2 GB, 1 job a la vez). Todas arrancan, y fallan donde deben: gitleaks (secreto en el historial), semgrep (reglas propias, falla con `SAST_FAIL_ON=high`),
+  osv-scanner/`npm audit`/trivy fs (dependencia vulnerable), trivy imagen (CVE critico en la base de la imagen) y workflow-policy (4 violaciones en un workflow malo).
+- Los clones usan `git init` + `git fetch --depth=1 <url> $GITHUB_SHA` + `checkout FETCH_HEAD`: con `clone --depth=1` + `checkout $GITHUB_SHA` fallaba en cualquier rama que no fuera la predeterminada.
+- Las imagenes `python` y `kaniko` no traen node: ahi no sirve `actions/checkout`. El `wget` de busybox (kaniko-debug) no negocia TLS con `git.tumi-ai.com` (alert 47): el contexto de kaniko se descarga con
+  `--context git://<host>/<repo>.git#<ref>#<sha>` y `GIT_USERNAME`/`GIT_PASSWORD`.
+- osv-scanner: `scan source` es sintaxis de la v2 (en v1.9.2 se interpreta `source` como una carpeta). El binario esta en `/osv-scanner` (no esta en el PATH de la imagen).
+- trivy: los binarios y los releases de GitHub de v0.58.1 ya no existen (aquasecurity retiro versiones antiguas); se fija 0.76.1. Al cambiar de version recalcula `TRIVY_LINUX64_SHA256`
+  (`sha256sum trivy_<v>_Linux-64bit.tar.gz`).
+- Forgejo 15 no tiene resumen de jobs (`GITHUB_STEP_SUMMARY` se descarta con una advertencia); `summarize.py` tambien escribe en el log.
+- Solo `security-audit.yml` publica en la pestana Seguridad de Capsule (osv-scanner via `POST .../security/sarif`); gitleaks, semgrep, trivy y deps solo bloquean con su codigo de salida.
+
 ## Secretos de entorno
 
 Forgejo no tiene secretos de entorno. Capsule los guarda y los inyecta solo al desplegar. `actions/deploy` con `environment:` ejecuta
