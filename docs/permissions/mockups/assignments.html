@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asignaciones por proyecto y repo - mockup</title>
+<link rel="stylesheet" href="_base.css">
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<div class="app">
+  <aside class="side" aria-label="Navegacion principal">
+    <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+    <a class="btn" href="#" style="display:block;text-decoration:none">&larr; Kynto Consulting</a>
+    <nav class="nav" aria-label="Proyecto api-pagos">
+      <div class="sect">api-pagos</div>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Resumen</a>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Repositorio y CI</a>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Entornos</a>
+      <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Acceso del proyecto</a>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Ajustes</a>
+    </nav>
+  </aside>
+  <main class="main" id="main">
+    <h1>Acceso del proyecto <code>api-pagos</code></h1>
+    <p class="sub">Politica: <span class="badge ok">hereda de la organizacion (abierta)</span> <button class="btn" style="min-height:26px;padding:2px 8px">Cambiar para este proyecto</button></p>
+
+    <div class="tabs" role="tablist" aria-label="Alcances">
+      <a class="tab" role="tab" aria-selected="true" href="#" tabindex="0">Proyecto</a>
+      <a class="tab" role="tab" aria-selected="false" href="#" tabindex="-1">Repositorio</a>
+      <a class="tab" role="tab" aria-selected="false" href="#" tabindex="-1">Entornos</a>
+    </div>
+
+    <div class="row" style="margin-bottom:12px">
+      <label class="sr-only" for="q">Buscar persona o grupo</label>
+      <input id="q" type="search" placeholder="Buscar persona o grupo" style="min-width:260px">
+      <span class="grow"></span>
+      <button class="btn primary">Dar acceso</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:auto">
+      <table>
+        <caption class="sr-only">Quien tiene acceso al proyecto api-pagos</caption>
+        <thead><tr><th scope="col">Sujeto</th><th scope="col">Plantilla efectiva</th><th scope="col">Por que</th><th scope="col">Caduca</th><th scope="col"><span class="sr-only">Acciones</span></th></tr></thead>
+        <tbody>
+          <tr><td><strong>Piero Alarcon</strong> <span class="badge acc">owner</span></td><td><span class="badge acc">admin</span></td><td>floor de organizacion (no se puede reducir)</td><td>-</td><td></td></tr>
+          <tr><td><strong>Grupo equipo-pagos</strong> (8)</td><td><span class="badge acc">deployer</span></td><td>asignacion de grupo</td><td>-</td><td><button class="btn" aria-label="Cambiar asignacion de equipo-pagos">Cambiar</button> <button class="btn danger" aria-label="Revocar equipo-pagos">Revocar</button></td></tr>
+          <tr><td><strong>Ana Quispe</strong></td><td><span class="badge acc">viewer</span> + deployer</td><td>directa viewer; suma deployer por equipo-pagos</td><td>-</td><td><button class="btn" aria-label="Cambiar Ana Quispe">Cambiar</button></td></tr>
+          <tr><td><strong>Luis Rojas</strong> <span class="badge warn">readonly</span></td><td><span class="badge acc">viewer</span></td><td>directa, techo de readonly</td><td><span class="badge info">6 d</span></td><td><button class="btn" aria-label="Renovar Luis Rojas">Renovar</button> <button class="btn danger" aria-label="Revocar Luis Rojas">Revocar</button></td></tr>
+          <tr><td><strong>Resto de miembros</strong> (15)</td><td><span class="badge">base</span> deployer / viewer</td><td>politica abierta: base de su plantilla de organizacion</td><td>-</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Dar acceso</h2>
+    <form class="card" onsubmit="return false" aria-label="Nueva asignacion">
+      <div class="row" style="align-items:flex-end">
+        <div><label for="who" style="display:block">Persona o grupo</label><input id="who" value="sre" style="min-width:200px"></div>
+        <div><label for="sc" style="display:block">Alcance</label><select id="sc"><option>Proyecto api-pagos</option><option>Repositorio api-pagos</option><option>Entorno produccion</option></select></div>
+        <div><label for="tp" style="display:block">Plantilla</label><select id="tp"><option>deployer</option><option>viewer</option><option>admin</option><option>soporte-produccion (personalizada)</option></select></div>
+        <div><label for="ex" style="display:block">Caduca</label><select id="ex"><option>Nunca</option><option>8 horas</option><option>7 dias</option><option>30 dias</option><option>Fecha...</option></select></div>
+      </div>
+      <div class="row" style="margin-top:10px"><label for="rs">Motivo</label><input id="rs" class="grow" placeholder="Obligatorio con caducidad: por que se da este acceso"></div>
+      <div class="callout" style="margin-top:10px" role="note">Con esta plantilla <strong>sre</strong> ganaria 31 permisos en api-pagos. Tu tienes todos (puedes concederlos). <a href="#">Ver el diff</a></div>
+      <div class="row" style="margin-top:10px"><span class="grow"></span><button class="btn">Cancelar</button><button class="btn primary">Conceder</button></div>
+    </form>
+
+    <h2>Alcance repositorio (Git Capsule)</h2>
+    <div class="card" style="padding:0;overflow:auto">
+      <table>
+        <caption class="sr-only">Acceso al repositorio api-pagos</caption>
+        <thead><tr><th scope="col">Sujeto</th><th scope="col">Acceso al repo</th><th scope="col">Equipo en Forgejo</th><th scope="col">Origen</th></tr></thead>
+        <tbody>
+          <tr><td>Grupo sre</td><td><span class="badge acc">repo-write</span></td><td><code>api-pagos-write</code></td><td>asignacion en repo</td></tr>
+          <tr><td>Grupo equipo-pagos</td><td><span class="badge acc">write</span> (de deployer)</td><td><code>api-pagos-write</code></td><td>proyecto</td></tr>
+          <tr><td>Luis Rojas</td><td><span class="badge acc">read</span></td><td><code>api-pagos-read</code></td><td>proyecto</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub">Nadie es admin de repo en Forgejo salvo el bot: protecciones, ajustes y secretos se gestionan desde Capsule (<code>git:protect</code>, <code>git:settings</code>, <code>ci:secret</code>).</p>
+
+    <h2>Confirmar cambio de politica a restringida</h2>
+    <div class="callout bad" role="alertdialog" aria-labelledby="dlg" aria-describedby="dlgd">
+      <strong id="dlg">Pasar api-pagos a restringido</strong>
+      <p id="dlgd" style="margin:6px 0">Dejaran de ver el proyecto 15 personas que hoy lo ven por su base, <strong>incluido tu</strong> si no tienes asignacion propia. Tienes la asignacion floor de owner, asi que no te afecta.</p>
+      <div class="row"><button class="btn">Cancelar</button><button class="btn danger">Confirmar y ocultar a 15 personas</button></div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

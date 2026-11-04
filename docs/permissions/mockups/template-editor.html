@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de plantillas - mockup</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  .cols { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } }
+  fieldset { border: 1px solid var(--border); border-radius: var(--radius-lg); margin: 0 0 12px; padding: 10px 14px; background: var(--bg-surface); }
+  legend { padding: 0 6px; font-weight: 600; }
+  .perm { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; border-top: 1px solid var(--border); }
+  .perm:first-of-type { border-top: 0; }
+  .perm input { margin-top: 4px; min-height: 0; accent-color: var(--accent); }
+  .perm .d { color: var(--text-secondary); font-size: 12.5px; }
+  .perm.locked { opacity: 1; } .perm.locked .d::after { content: " (requerido por otro permiso marcado)"; color: var(--text-secondary); }
+  .sticky { position: sticky; top: 16px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<div class="app">
+  <aside class="side" aria-label="Navegacion principal">
+    <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+    <button class="btn orgsel" aria-haspopup="listbox" aria-expanded="false"><span>Kynto Consulting</span><span aria-hidden="true">&#9662;</span></button>
+    <nav class="nav" aria-label="Organizacion">
+      <a href="#"><span class="ico" aria-hidden="true"></span>Projects</a>
+      <div class="sect">Administracion</div>
+      <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Usuarios y acceso</a>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Auditoria</a>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+    </nav>
+  </aside>
+  <main class="main" id="main">
+    <p class="sub"><a href="#">Roles</a> / <span aria-current="page">soporte-produccion</span></p>
+    <h1>soporte-produccion <span class="badge acc">proyecto</span> <span class="badge">v3</span></h1>
+    <p class="sub">Clonada de <strong>deployer</strong> (sistema). Sigue la ultima version: los cambios aplican a quienes la usan (4 personas, 2 grupos, 5 proyectos).</p>
+
+    <div class="cols">
+      <form aria-label="Permisos de la plantilla" onsubmit="return false">
+        <div class="row" style="margin-bottom:12px">
+          <label for="nm">Nombre</label><input id="nm" value="Soporte de produccion">
+          <label for="sl">Identificador</label><input id="sl" value="soporte-produccion" class="mono">
+          <span class="grow"></span>
+          <label for="qq" class="sr-only">Buscar permiso</label><input id="qq" type="search" placeholder="Buscar permiso">
+        </div>
+
+        <fieldset>
+          <legend>Proyecto <span class="badge">3 de 5</span></legend>
+          <div class="perm"><input type="checkbox" id="a1" checked disabled><label for="a1"><code>project:view</code> <span class="badge">siempre</span><div class="d">Saber que el proyecto existe (puerta de visibilidad).</div></label></div>
+          <div class="perm"><input type="checkbox" id="a2" checked><label for="a2"><code>project:read</code><div class="d">Ver el detalle del proyecto.</div></label></div>
+          <div class="perm"><input type="checkbox" id="a3"><label for="a3"><code>project:update</code><div class="d">Cambiar los ajustes del proyecto.</div></label></div>
+          <div class="perm"><input type="checkbox" id="a4"><label for="a4"><code>project:delete</code> <span class="badge bad">sensible</span><div class="d">Borrar el proyecto.</div></label></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Despliegues y entornos <span class="badge">5 de 11</span></legend>
+          <div class="perm"><input type="checkbox" id="b1" checked><label for="b1"><code>deployment:read</code><div class="d">Ver despliegues y su estado.</div></label></div>
+          <div class="perm"><input type="checkbox" id="b2" checked><label for="b2"><code>deployment:create</code><div class="d">Desplegar.</div></label></div>
+          <div class="perm"><input type="checkbox" id="b3" checked><label for="b3"><code>deployment:rollback</code><div class="d">Volver a una version anterior.</div></label></div>
+          <div class="perm"><input type="checkbox" id="b4"><label for="b4"><code>promotion:request</code><div class="d">Pedir una promocion a otro entorno.</div></label></div>
+          <div class="perm"><input type="checkbox" id="b5"><label for="b5"><code>promotion:approve</code> <span class="badge bad">sensible</span><div class="d">Aprobar promociones: se concede por entorno, no se puede incluir aqui salvo para entornos concretos.</div></label></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Bases de datos <span class="badge">1 de 4</span></legend>
+          <div class="perm"><input type="checkbox" id="c1" checked><label for="c1"><code>database:read</code><div class="d">Listar bases y ver su detalle.</div></label></div>
+          <div class="perm"><input type="checkbox" id="c2"><label for="c2"><code>database:query</code> <span class="badge bad">sensible</span><div class="d">Explorador SQL.</div></label></div>
+          <div class="perm"><input type="checkbox" id="c3"><label for="c3"><code>database:create</code><div class="d">Crear bases.</div></label></div>
+          <div class="perm"><input type="checkbox" id="c4"><label for="c4"><code>database:delete</code> <span class="badge bad">sensible</span><div class="d">Borrar bases.</div></label></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Repos y CI <span class="badge">3 de 14</span></legend>
+          <div class="perm"><input type="checkbox" id="d1" checked><label for="d1"><code>git:read</code><div class="d">Codigo, ramas, commits y PR.</div></label></div>
+          <div class="perm"><input type="checkbox" id="d2" checked><label for="d2"><code>git:write</code><div class="d">Ramas y PR.</div></label></div>
+          <div class="perm"><input type="checkbox" id="d3" checked><label for="d3"><code>ci:read</code><div class="d">Runs y logs de CI.</div></label></div>
+          <div class="perm"><input type="checkbox" id="d4"><label for="d4"><code>ci:secret</code> <span class="badge bad">sensible</span><div class="d">Secretos de CI.</div></label></div>
+        </fieldset>
+        <p class="sub">Otros grupos del catalogo: variables, red y gateway, seguridad, backups, dominios, correo, webhooks, miembros del proyecto. Se despliegan igual.</p>
+
+        <div class="callout warn" role="alert">Falta una dependencia: <code>deployment:create</code> requiere <code>deployment:read</code> (ya marcado) y <code>project:view</code> (incluido). Sin dependencias pendientes.</div>
+        <div class="row" style="margin-top:12px"><label for="note">Nota de version</label><input id="note" class="grow" placeholder="Que cambia y por que"><button class="btn">Vista previa del impacto</button><button class="btn primary">Publicar v4</button></div>
+      </form>
+
+      <aside class="sticky" aria-label="Resumen e impacto">
+        <div class="card">
+          <h3>Impacto de publicar</h3>
+          <p class="sub" style="margin:0 0 6px">Simulacion (no se ha guardado nada)</p>
+          <p style="margin:4px 0"><span class="badge ok">+ gana</span> <code>deployment:rollback</code></p>
+          <p style="margin:4px 0"><span class="badge bad">- pierde</span> <code>database:query</code></p>
+          <p class="sub">Afecta a 4 personas, 2 grupos y 5 proyectos. Quienes pierden permisos lo notaran de inmediato.</p>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3>Versiones</h3>
+          <ol style="margin:0;padding-left:18px">
+            <li>v3 &middot; Ana &middot; hace 2 d <a href="#">comparar</a></li>
+            <li>v2 &middot; Piero &middot; hace 9 d <a href="#">comparar</a></li>
+            <li>v1 &middot; clonada de deployer</li>
+          </ol>
+          <p class="sub">Revertir = publicar una version nueva con el contenido de una anterior.</p>
+        </div>
+        <div class="callout" style="margin-top:12px" role="note">Solo puedes <strong>anadir</strong> permisos que tu tienes. Las plantillas del sistema no se editan: se clonan.</div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>

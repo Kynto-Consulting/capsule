@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de permisos - mockup</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  .trace { list-style: none; margin: 0; padding: 0; }
+  .trace li { display: grid; grid-template-columns: 28px 150px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); align-items: start; }
+  .trace li:first-child { border-top: 0; }
+  .step { width: 24px; height: 24px; border-radius: 99px; background: var(--bg-raised); border: 1px solid var(--border-strong); text-align: center; line-height: 22px; font-size: 12px; }
+  .step.final { background: var(--danger-dim); border-color: var(--danger); }
+  .verdict { font-size: 18px; font-weight: 600; }
+  @media (max-width: 640px) { .trace li { grid-template-columns: 28px 1fr; } .trace li .d { grid-column: 2; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<div class="app">
+  <aside class="side" aria-label="Navegacion principal">
+    <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+    <button class="btn orgsel" aria-haspopup="listbox" aria-expanded="false"><span>Kynto Consulting</span><span aria-hidden="true">&#9662;</span></button>
+    <nav class="nav" aria-label="Organizacion">
+      <a href="#"><span class="ico" aria-hidden="true"></span>Projects</a>
+      <div class="sect">Administracion</div>
+      <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Usuarios y acceso</a>
+      <a href="#"><span class="ico" aria-hidden="true"></span>Auditoria</a>
+    </nav>
+  </aside>
+  <main class="main" id="main">
+    <h1>Simulador: puede X hacer Y sobre Z</h1>
+    <p class="sub">Usa el mismo codigo que decide en produccion. Requiere <code>assignment:read</code>.</p>
+
+    <form class="card" onsubmit="return false" aria-label="Consulta">
+      <div class="row" style="align-items:flex-end">
+        <div><label for="u" style="display:block">Persona</label><input id="u" value="Luis Rojas" style="min-width:200px"></div>
+        <div><label for="p" style="display:block">Permiso</label><input id="p" value="database:query" class="mono" list="cat" style="min-width:200px"><datalist id="cat"><option value="database:query"><option value="deployment:create"></datalist></div>
+        <div><label for="z" style="display:block">Sobre</label><select id="z"><option>Proyecto api-pagos</option><option>Repo api-pagos</option><option>Organizacion</option></select></div>
+        <div><label for="t" style="display:block">Con token</label><select id="t"><option>sin token (sesion)</option><option>ci-deploy (cap_...)</option></select></div>
+        <button class="btn primary">Simular</button>
+      </div>
+    </form>
+
+    <h2>Resultado</h2>
+    <div class="card" role="region" aria-labelledby="rv" aria-live="polite">
+      <p class="verdict" id="rv"><span class="badge bad">No permitido</span> Luis Rojas no puede <code>database:query</code> en api-pagos</p>
+      <ol class="trace" aria-label="Rastro de la decision">
+        <li><span class="step">1</span><strong>Cuenta y membresia</strong><span class="d">Activa en Kynto Consulting. Plantilla de organizacion <span class="badge warn">readonly v1</span>.</span></li>
+        <li><span class="step">2</span><strong>Politica</strong><span class="d">Abierta: la base de readonly (viewer) estaria disponible, pero hay asignacion propia.</span></li>
+        <li><span class="step">3</span><strong>Asignaciones propias</strong><span class="d">Directa <span class="badge acc">viewer</span> en api-pagos, concedida por Ana Quispe el 2026-10-20, caduca en 6 d. Sustituye a la base. Permisos: 15, sin <code>database:query</code>.</span></li>
+        <li><span class="step">4</span><strong>Grupos</strong><span class="d">Grupo <em>externos</em>: sin asignaciones en este proyecto.</span></li>
+        <li><span class="step">5</span><strong>Techo</strong><span class="d">readonly: tope de permisos de viewer. Aunque se le asignara <em>admin</em>, quedaria en viewer.</span></li>
+        <li><span class="step final">6</span><strong>Decision</strong><span class="d">Falta <code>database:query</code>. Para concederlo: asignar una plantilla que lo incluya (deployer o admin), y quitar el techo cambiando su rol de organizacion.</span></li>
+      </ol>
+    </div>
+
+    <h2>Que pasaria si... (hipotetico, no se guarda)</h2>
+    <form class="card" onsubmit="return false" aria-label="Hipotesis">
+      <div class="row" style="align-items:flex-end">
+        <div><label for="h1" style="display:block">Anadir asignacion</label><select id="h1"><option>deployer en api-pagos</option><option>admin en api-pagos</option></select></div>
+        <button class="btn">Comparar</button>
+      </div>
+      <div class="callout" style="margin-top:10px" role="status">Con <em>deployer</em> ganaria 14 permisos, entre ellos <code>database:query</code>? <strong>Si</strong>. Pero el techo de readonly lo recorta: <strong>seguiria sin poder</strong>. Cambia antes su rol de organizacion.</div>
+    </form>
+
+    <h2>Otra decision: permitido</h2>
+    <div class="card">
+      <p class="verdict"><span class="badge ok">Permitido</span> Ana Quispe puede <code>deployment:create</code> en api-pagos</p>
+      <ol class="trace" aria-label="Rastro de la decision">
+        <li><span class="step">1</span><strong>Membresia</strong><span class="d">member v1, activa.</span></li>
+        <li><span class="step">3</span><strong>Asignaciones propias</strong><span class="d">Por el grupo <em>equipo-pagos</em>: <span class="badge acc">deployer</span> (incluye <code>deployment:create</code>).</span></li>
+        <li><span class="step">6</span><strong>Decision</strong><span class="d">Permitido, sin techo ni caducidad.</span></li>
+      </ol>
+    </div>
+  </main>
+</div>
+</body>
+</html>

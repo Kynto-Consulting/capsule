@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vista publica y visibilidad del repo - mockup (fase P)</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px; }
+  .pubbar { display: flex; align-items: center; gap: 12px; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--bg-subtle); flex-wrap: wrap; }
+  .tree td:first-child { font-family: ui-monospace, Menlo, monospace; }
+  .clone { display: flex; gap: 8px; align-items: center; } .clone input { flex: 1; min-width: 220px; font-family: ui-monospace, Menlo, monospace; }
+  .never li { margin: 3px 0; }
+  .pane { border: 1px dashed var(--border-strong); border-radius: var(--radius-xl); padding: 16px; margin: 20px 0; }
+  .pane > h2:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+
+<div class="wrap" id="main">
+  <h1>Fase P: repos publicos</h1>
+  <p class="sub">Tres pantallas: (A) la vista publica sin sesion, (B) el PR externo con GitHub, (C) el dialogo para hacer publico un repo en el dashboard.</p>
+
+  <section class="pane" aria-labelledby="A">
+    <h2 id="A">A. <code>https://app.tumi-ai.com/public/git/kynto/api-pagos</code> (sin sesion)</h2>
+    <div class="pubbar" role="banner" style="border:1px solid var(--border);border-radius:var(--radius-lg)">
+      <img src="../../../frontend/public/logo.png" alt="" width="24" height="24"><strong>Capsule</strong>
+      <span class="badge info" title="Contexto publico">Publico</span>
+      <span class="grow"></span>
+      <span style="color:var(--text-secondary)">No has iniciado sesion</span>
+      <a class="btn" href="#B" style="text-decoration:none">Contribuir con GitHub</a>
+    </div>
+    <div style="padding:16px 4px">
+      <h1 style="margin-bottom:2px">kynto / api-pagos <span class="badge info">Publico</span></h1>
+      <p class="sub">API de pagos. Licencia MIT. Rama por defecto <code>main</code>.</p>
+      <div class="row" style="margin-bottom:12px">
+        <label for="br" class="sr-only">Rama</label><select id="br"><option>main</option><option>v1.4</option></select>
+        <div class="clone grow"><label for="cu" class="sr-only">URL de clon anonimo, solo lectura</label><input id="cu" readonly value="https://git.tumi-ai.com/kynto/api-pagos.git"><button class="btn">Copiar</button></div>
+      </div>
+      <div class="card" style="padding:0;overflow:auto"><table class="tree">
+        <caption class="sr-only">Archivos de main</caption>
+        <thead><tr><th scope="col">Nombre</th><th scope="col">Ultimo commit</th><th scope="col">Cuando</th></tr></thead>
+        <tbody>
+          <tr><td>src/</td><td>Valida montos antes de cobrar &middot; Ana Quispe</td><td>hace 2 d</td></tr>
+          <tr><td>README.md</td><td>Documenta la API &middot; Ana Quispe</td><td>hace 9 d</td></tr>
+          <tr><td>LICENSE</td><td>Initial commit &middot; Piero A.</td><td>hace 4 meses</td></tr>
+        </tbody></table></div>
+      <div class="callout" style="margin-top:12px" role="note">Solo lectura. El historial publico muestra nombres de autor, no correos. Esta vista no incluye issues, wiki, CI, despliegues ni configuracion.</div>
+      <h2>README.md</h2>
+      <div class="card"><p style="margin:0">Renderizado y saneado: sin HTML crudo; las imagenes solo del mismo repo.</p></div>
+    </div>
+  </section>
+
+  <section class="pane" aria-labelledby="B" id="B">
+    <h2 id="B2">B. Abrir un PR con tu cuenta de GitHub</h2>
+    <div class="row" style="align-items:flex-start">
+      <div class="card grow" style="min-width:300px">
+        <h3>1. Identificate</h3>
+        <button class="btn primary">Continuar con GitHub</button>
+        <p class="sub" style="margin-top:8px">Solo pedimos tu perfil publico (<code>read:user</code>). No creamos una cuenta en este servidor ni te damos permisos: solo puedes abrir un PR y comentar en el tuyo.</p>
+        <h3 style="margin-top:12px">Sesion iniciada</h3>
+        <p style="margin:4px 0"><span class="badge">GitHub</span> <strong>@lrojas</strong> <button class="btn" style="min-height:26px;padding:2px 8px">Cerrar sesion</button></p>
+      </div>
+      <form class="card grow" style="min-width:320px" onsubmit="return false" aria-label="Nuevo pull request externo">
+        <h3>2. Tu cambio</h3>
+        <div role="radiogroup" aria-label="Origen del cambio">
+          <label><input type="radio" name="o" checked> Traer una rama de mi GitHub</label><br>
+          <label><input type="radio" name="o"> Subir un parche (.patch, hasta 1 MiB)</label>
+        </div>
+        <div class="row" style="margin-top:8px"><label for="gr">Repositorio</label><input id="gr" value="lrojas/api-pagos"><label for="gb">Rama</label><input id="gb" value="fix-redondeo"></div>
+        <p class="sub" style="margin:4px 0">El repositorio debe ser tuyo (<code>@lrojas</code>) y estar en github.com.</p>
+        <label for="tt">Titulo</label><input id="tt" style="width:100%" value="Corrige el redondeo de centimos">
+        <button class="btn primary" style="margin-top:10px">Abrir pull request</button>
+        <div class="callout warn" style="margin-top:10px" role="note">Tu PR se revisa a mano. <strong>El CI no se ejecuta</strong> hasta que un mantenedor lo apruebe, y entonces corre aislado y sin secretos.</div>
+      </form>
+    </div>
+    <h3 style="margin-top:16px">Mi contribucion #14</h3>
+    <div class="card"><div class="row"><span class="badge ok">abierto</span><strong class="grow">Corrige el redondeo de centimos</strong><span class="badge">CI: no ejecutado</span></div>
+      <p class="sub" style="margin:6px 0 0">Origen: github.com/lrojas/api-pagos @ 3f9a2c1. Un mantenedor te respondera aqui.</p></div>
+  </section>
+
+  <section class="pane" aria-labelledby="C">
+    <h2 id="C">C. Dashboard: hacer publico el repositorio (<code>repo:set-visibility</code>)</h2>
+    <div class="callout bad" role="alertdialog" aria-labelledby="cd" aria-describedby="cdd">
+      <strong id="cd">Hacer publico kynto/api-pagos</strong>
+      <p id="cdd" style="margin:6px 0">Cualquier persona podra leer y clonar el codigo y <strong>todo el historial</strong>. Lo clonado no se puede retirar.</p>
+      <h3>Resultado del analisis previo</h3>
+      <ul class="never" style="margin:0 0 8px;padding-left:18px">
+        <li><span class="badge warn">3</span> correos de autor en el historial: ana@ejemplo.com, piero.alarcon@labroe.com, bot@kynto.pe (se publican con el clon)</li>
+        <li><span class="badge bad">1 critico</span> posible secreto en <code>config/old.env</code> (commit 8c1a...). Bloquea la publicacion.</li>
+        <li><span class="badge ok">ok</span> Tamano 38 MB (maximo 500 MB). Sin ficheros &gt; 50 MB.</li>
+      </ul>
+      <label for="rc" style="display:block">Escribe <code>kynto/api-pagos</code> para confirmar</label><input id="rc" style="min-width:240px">
+      <p style="margin:8px 0"><label><input type="checkbox"> Entiendo que el historial, incluidos los correos de los autores, pasa a ser publico y no se puede retirar de copias ya hechas.</label></p>
+      <p style="margin:8px 0"><label for="pw">Contrasena para confirmar</label> <input id="pw" type="password" autocomplete="current-password"></p>
+      <div class="row"><button class="btn">Cancelar</button><button class="btn danger" aria-disabled="true">Hacer publico (bloqueado por el analisis)</button></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h3>Politica de la organizacion</h3>
+      <p class="row"><span class="badge bad">Repos publicos prohibidos</span> <button class="btn">Permitir repos publicos...</button></p>
+      <p class="sub" style="margin:0">Por defecto prohibidos. Solo un owner puede permitirlos, con confirmacion fuerte. Volver a prohibirlos pone todos los repos en privado al instante.</p></div>
+    <div class="card" style="margin-top:12px"><h3>Repo publico actual</h3>
+      <p class="row"><span class="badge info">Publico</span> https://app.tumi-ai.com/public/git/kynto/api-pagos <span class="grow"></span><button class="btn danger">Volver a privado</button></p>
+      <p class="sub" style="margin:0">Volver a privado es inmediato, sin confirmacion adicional. Lo ya clonado por terceros no se puede retirar.</p></div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sidebar por permisos efectivos - mockup</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  .wrap { padding: 24px; max-width: 1280px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(262px, 1fr)); gap: 16px; align-items: start; }
+  .frame { background: var(--bg-subtle); border: 1px solid var(--border-strong); border-radius: var(--radius-xl); padding: 12px 10px; }
+  .frame h3 { padding: 0 8px; }
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 16px; }
+  .drawer { border: 1px solid var(--border-strong); border-radius: var(--radius-xl); overflow: hidden; width: 340px; max-width: 100%; background: var(--bg-surface); }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .menu-btn { width: 40px; height: 40px; }
+  .err { margin: 6px 8px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<div class="wrap" id="contenido">
+  <h1>Sidebar construido desde <code>GET /me/permissions</code></h1>
+  <p class="sub">Cada entrada declara <code>anyOf</code> de permisos; si el usuario no tiene ninguno, la entrada NO se dibuja (no se muestra bloqueada). Ocultar el menu no es seguridad: el servidor decide.</p>
+
+  <div class="grid">
+    <!-- 1. Owner, contexto organizacion -->
+    <section class="frame" aria-labelledby="p1">
+      <h3 id="p1">Owner de la organizacion</h3>
+      <p class="persona">Plantilla <span class="badge acc">owner</span> en Kynto Consulting</p>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <button class="btn orgsel" aria-haspopup="listbox" aria-expanded="false" aria-label="Organizacion activa: Kynto Consulting. Cambiar"><span>Kynto Consulting</span><span aria-hidden="true">&#9662;</span></button>
+      <nav class="nav" aria-label="Organizacion">
+        <div class="sect" id="o1">Trabajo</div>
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Projects<span class="count quiet" aria-label="12 proyectos">12</span></a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Deployments</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Git</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Aprobaciones<span class="count" aria-label="3 pendientes de aprobar">3</span></a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Notificaciones<span class="count" aria-label="5 sin leer">5</span></a>
+        <div class="sect">Recursos</div>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Databases</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Storage</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Email</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Domains</a>
+        <div class="sect">Administracion</div>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Usuarios y acceso</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Auditoria</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Facturacion</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+      </nav>
+    </section>
+
+    <!-- 2. Deployer (open mode) -->
+    <section class="frame" aria-labelledby="p2">
+      <h3 id="p2">Miembro con base deployer</h3>
+      <p class="persona">Plantilla <span class="badge">member</span>, politica abierta</p>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <button class="btn orgsel" aria-haspopup="listbox" aria-expanded="false" aria-label="Organizacion activa: Kynto Consulting. Cambiar"><span>Kynto Consulting</span><span aria-hidden="true">&#9662;</span></button>
+      <nav class="nav" aria-label="Organizacion">
+        <div class="sect">Trabajo</div>
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Projects<span class="count quiet" aria-label="12 proyectos">12</span></a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Deployments</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Git</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Notificaciones<span class="count" aria-label="2 sin leer">2</span></a>
+        <div class="sect">Recursos</div>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Databases</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Storage</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Email</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Domains</a>
+        <div class="sect">Cuenta</div>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+      </nav>
+      <p class="persona" style="padding:8px">Sin Aprobaciones (no es aprobador), sin Usuarios y acceso, Auditoria ni Facturacion.</p>
+    </section>
+
+    <!-- 3. Contratista: solo un repo -->
+    <section class="frame" aria-labelledby="p3">
+      <h3 id="p3">Contratista: solo repo-write de <code>infra</code></h3>
+      <p class="persona">Plantilla <span class="badge warn">readonly</span> con techo, politica restringida</p>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <button class="btn orgsel" aria-haspopup="listbox" aria-expanded="false" aria-label="Organizacion activa: Kynto Consulting. Cambiar"><span>Kynto Consulting</span><span aria-hidden="true">&#9662;</span></button>
+      <nav class="nav" aria-label="Organizacion">
+        <div class="sect">Trabajo</div>
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Projects<span class="count quiet" aria-label="1 proyecto">1</span></a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Git</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Notificaciones</a>
+        <div class="sect">Cuenta</div>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+      </nav>
+      <p class="persona" style="padding:8px">Ve el proyecto (<code>project:view</code>) y su repo; no ve Deployments, Databases ni nada de recursos.</p>
+    </section>
+
+    <!-- 4. Contexto proyecto -->
+    <section class="frame" aria-labelledby="p4">
+      <h3 id="p4">Contexto de proyecto (deployer)</h3>
+      <p class="persona">Dentro de <code>api-pagos</code>; las secciones salen de los permisos EN ese proyecto</p>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <a class="btn" href="#" style="display:block;text-decoration:none">&larr; Kynto Consulting</a>
+      <nav class="nav" aria-label="Proyecto api-pagos">
+        <div class="sect">api-pagos</div>
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Resumen</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Deployments</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Repositorio y CI</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Variables</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Entornos</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Bases de datos</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Dominios</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Backups</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Seguridad</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Logs</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Ajustes</a>
+      </nav>
+      <p class="persona" style="padding:8px">Sin Red y puertos (<code>network:read</code> lo tiene, pero la pagina es de admin: se ve solo lectura), sin Acceso del proyecto (<code>assignment:read</code>).</p>
+    </section>
+  </div>
+
+  <h2>Estados del sidebar</h2>
+  <div class="grid">
+    <section class="frame" aria-labelledby="s1">
+      <h3 id="s1">Cargando permisos</h3>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <nav class="nav" aria-label="Organizacion" aria-busy="true">
+        <div class="skel" role="presentation"></div><div class="skel" role="presentation"></div><div class="skel" role="presentation"></div><div class="skel" role="presentation"></div>
+        <span class="sr-only" role="status">Cargando menu</span>
+      </nav>
+      <p class="persona" style="padding:8px">Mientras no hay <code>/me/permissions</code> solo se dibujan Projects y Settings (comunes a todo miembro), nunca un menu "permisivo".</p>
+    </section>
+    <section class="frame" aria-labelledby="s2">
+      <h3 id="s2">Error al cargar</h3>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <div class="callout bad err" role="alert">No se pudo cargar tu menu completo. <button class="btn" style="margin-top:6px">Reintentar</button></div>
+      <nav class="nav" aria-label="Organizacion">
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Projects</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+      </nav>
+    </section>
+    <section class="frame" aria-labelledby="s3">
+      <h3 id="s3">Vacio: sin proyectos visibles</h3>
+      <div class="brand"><img src="../../../frontend/public/logo.png" alt="" width="26" height="26"> Capsule</div>
+      <nav class="nav" aria-label="Organizacion">
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Projects<span class="count quiet" aria-label="0 proyectos">0</span></a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+      </nav>
+      <div class="callout" style="margin:8px" role="status">No tienes acceso a ningun proyecto todavia. Pide a un administrador de <strong>Kynto Consulting</strong> que te asigne uno.</div>
+    </section>
+    <section class="frame" aria-labelledby="s4">
+      <h3 id="s4">Cuenta suspendida en la org</h3>
+      <div class="callout warn" style="margin:8px" role="alert">Tu acceso a <strong>Kynto Consulting</strong> esta suspendido. Contacta con un owner. Puedes cambiar a otra organizacion.</div>
+      <button class="btn orgsel" style="margin:0 8px;width:calc(100% - 16px)" aria-haspopup="listbox">Cambiar de organizacion <span aria-hidden="true">&#9662;</span></button>
+    </section>
+  </div>
+
+  <h2>Selector de organizacion (abierto)</h2>
+  <div class="grid">
+    <section class="frame" aria-labelledby="sel">
+      <h3 id="sel">Lista</h3>
+      <div role="listbox" aria-label="Organizaciones" tabindex="0" class="card" style="padding:6px">
+        <div role="option" aria-selected="true" class="row" style="padding:8px"><span class="grow">Kynto Consulting</span><span class="badge acc">owner</span></div>
+        <div role="option" aria-selected="false" class="row" style="padding:8px"><span class="grow">Cliente Pagos SAC</span><span class="badge">member</span></div>
+        <div role="option" aria-selected="false" class="row" style="padding:8px"><span class="grow">Open Lab</span><span class="badge warn">suspendido</span></div>
+      </div>
+      <p class="persona" style="padding:8px">Cambiar de organizacion vuelve a pedir <code>/me/permissions?org=</code> y reconstruye el menu. La insignia sale de la plantilla de organizacion.</p>
+    </section>
+    <section class="frame" aria-labelledby="plat">
+      <h3 id="plat">Seccion de plataforma</h3>
+      <p class="persona">Solo con <code>platform-user:read</code></p>
+      <nav class="nav" aria-label="Plataforma"><div class="sect">Plataforma</div>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Usuarios de plataforma</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Backups de plataforma</a></nav>
+      <p class="persona" style="padding:8px">Es un contexto aparte del de organizacion: no depende de la org activa.</p>
+    </section>
+  </div>
+
+  <h2>Version movil (&lt; 760 px)</h2>
+  <div class="drawer" aria-label="Vista movil">
+    <div class="topbar">
+      <button class="btn menu-btn" aria-label="Abrir menu" aria-expanded="true" aria-controls="drawer-nav">&#9776;</button>
+      <img src="../../../frontend/public/logo.png" alt="" width="24" height="24"><strong>Capsule</strong>
+      <span class="grow"></span><span class="badge acc">Kynto</span>
+    </div>
+    <div class="side" style="display:flex;border:0">
+      <nav class="nav" id="drawer-nav" aria-label="Organizacion">
+        <a href="#" aria-current="page"><span class="ico" aria-hidden="true"></span>Projects</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Deployments</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Aprobaciones<span class="count">3</span></a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Usuarios y acceso</a>
+        <a href="#"><span class="ico" aria-hidden="true"></span>Settings</a>
+      </nav>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:8px">Cajon sobre el contenido con fondo atenuado, cierre con Escape, foco atrapado, objetivos tactiles >= 40 px.</p>
+
+  <h2>Reglas de visibilidad (resumen)</h2>
+  <div class="card"><table>
+    <thead><tr><th scope="col">Entrada</th><th scope="col">Se muestra si el usuario tiene (cualquiera de)</th><th scope="col">Fuente</th></tr></thead>
+    <tbody>
+      <tr><td>Projects</td><td><code>project:view</code> o <code>project:create</code></td><td><code>aggregate</code></td></tr>
+      <tr><td>Deployments</td><td><code>deployment:read</code></td><td><code>aggregate</code></td></tr>
+      <tr><td>Git</td><td><code>git:read</code></td><td><code>aggregate</code></td></tr>
+      <tr><td>Aprobaciones</td><td><code>promotion:approve</code></td><td><code>aggregate</code></td></tr>
+      <tr><td>Databases / Storage / Email / Domains</td><td><code>database:read</code> / <code>storage:read</code> / <code>email:read</code> / <code>domain:read</code></td><td><code>aggregate</code></td></tr>
+      <tr><td>Usuarios y acceso</td><td><code>assignment:read</code>, <code>group:read</code>, <code>template:read</code> o <code>member:invite</code> (subitems por permiso; <code>member:read</code> solo no basta: todo miembro lo tiene y ve la lista en Settings)</td><td><code>org.permissions</code></td></tr>
+      <tr><td>Auditoria</td><td><code>audit:read</code></td><td><code>org.permissions</code></td></tr>
+      <tr><td>Facturacion</td><td><code>billing:read</code></td><td><code>org.permissions</code></td></tr>
+    </tbody></table></div>
+</div>
+</body>
+</html>

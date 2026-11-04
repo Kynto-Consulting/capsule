@@ -1,0 +1,1226 @@
+openapi: 3.1.0
+info:
+  title: Capsule - API de usuarios y permisos (rutas nuevas)
+  version: 0.1.0-design
+  description: |
+    Rutas NUEVAS del motor de permisos (SPEC.md). Las rutas actuales de miembros, organizaciones, tokens y auditoria no cambian
+    (MIGRATION.md sec. 4); aqui solo se listan las extensiones aditivas en `x-compat`.
+
+    Convencion `x-permission` (obligatoria en cada operacion, la verifica un test contra el router y contra `routePermissions`):
+
+    ```yaml
+    x-permission:
+      permissions: [ "member:invite" ]   # TODOS son necesarios (AND); [] si scope es self o public
+      scope: org                          # org | project | repo | env | platform | self | public
+      tokens: denied                      # denied = un token acotado nunca pasa; allowed = pasa si el token lleva los permisos
+      sensitive: true                     # opcional: ruta estricta de epoch y registro de denegacion
+    ```
+
+    Errores: 401 sin autenticar; 403 no miembro o sin permiso (`error.details` con `permission`, `missing`, `reason` solo si el recurso es visible);
+    404 recurso no visible para el actor (no filtra existencia); 409 invariantes (`LAST_OWNER`, `MIXED_ASSIGNMENTS`, `SYSTEM_TEMPLATE`, `WOULD_HIDE`);
+    422 validacion (`details.fields`, `details.missing_dependencies`, `details.out_of_scope`, `details.unknown_permissions`).
+    Todas las rutas de escritura admiten `Idempotency-Key` y devuelven el estado final.
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+tags:
+  - name: me
+  - name: catalog
+  - name: templates
+  - name: groups
+  - name: assignments
+  - name: access
+  - name: invitations
+  - name: ownership
+  - name: tokens
+  - name: audit
+  - name: public
+paths:
+  /permissions/catalog:
+    get:
+      tags: [catalog]
+      summary: Catalogo de permisos atomicos
+      description: Fuente unica para la UI y el CLI. Cacheable por `catalog_version`.
+      x-permission: { permissions: [], scope: self, tokens: allowed }
+      responses:
+        "200":
+          description: Catalogo
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [catalog_version, groups, permissions]
+                properties:
+                  catalog_version: { type: integer }
+                  groups:
+                    type: array
+                    items: { type: object, properties: { id: { type: string }, label: { type: string } } }
+                  permissions:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/permissions:
+    get:
+      tags: [me]
+      summary: Permisos efectivos del usuario autenticado (fuente de la UI y del sidebar)
+      x-permission: { permissions: [], scope: self, tokens: allowed }
+      parameters:
+        - { name: org, in: query, schema: { type: string }, description: "id o slug; por defecto la organizacion activa" }
+        - { name: project, in: query, schema: { type: string, format: uuid }, description: "devuelve permissions[] en claro para ese proyecto" }
+        - { name: expand, in: query, schema: { type: string, enum: [projects] } }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: Permisos
+          headers:
+            ETag: { schema: { type: string } }
+            X-Access-Epoch: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyPermissions" }
+        "304": { description: Sin cambios }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/permissions/explain:
+    get:
+      tags: [me]
+      summary: Por que tengo (o no) un permiso
+      x-permission: { permissions: [], scope: self, tokens: allowed }
+      parameters:
+        - { name: permission, in: query, required: true, schema: { type: string } }
+        - { name: org, in: query, required: true, schema: { type: string } }
+        - { name: scope_type, in: query, schema: { type: string, enum: [org, project, repo, env] } }
+        - { name: scope_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Rastro de decision del propio usuario
+          content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{orgID}/templates:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [templates]
+      summary: Plantillas visibles (sistema y de la organizacion)
+      x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [org, project, repo] } }
+        - { name: include_archived, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: Lista
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/Template" } } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [templates]
+      summary: Crear plantilla personalizada (o clonar con `cloned_from`)
+      x-permission: { permissions: ["template:manage"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TemplateInput" } } }
+      responses:
+        "201": { description: Creada (version 1), content: { application/json: { schema: { $ref: "#/components/schemas/Template" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/templates/{templateID}:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/TemplateID" } ]
+    get:
+      tags: [templates]
+      summary: Plantilla con su ultima version y recuento de uso
+      x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Plantilla, content: { application/json: { schema: { $ref: "#/components/schemas/Template" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [templates]
+      summary: Publicar una version nueva (n+1)
+      description: Con `dry_run=true` no guarda y devuelve el impacto. Solo se pueden AGREGAR permisos que el actor posea. Las plantillas del sistema responden 409 SYSTEM_TEMPLATE.
+      x-permission: { permissions: ["template:manage"], scope: org, tokens: denied, sensitive: true }
+      parameters:
+        - { name: dry_run, in: query, schema: { type: boolean, default: false } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TemplateInput" } } }
+      responses:
+        "200": { description: Version publicada o impacto, content: { application/json: { schema: { $ref: "#/components/schemas/PublishResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [templates]
+      summary: Archivar (si esta en uso) o borrar (si no tiene asignaciones)
+      x-permission: { permissions: ["template:manage"], scope: org, tokens: denied, sensitive: true }
+      responses:
+        "204": { description: Hecho }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{orgID}/templates/{templateID}/versions:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/TemplateID" } ]
+    get:
+      tags: [templates]
+      summary: Historial de versiones
+      x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Versiones, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/TemplateVersion" } } } } } } }
+  /orgs/{orgID}/templates/{templateID}/versions/{from}/diff/{to}:
+    parameters:
+      - { $ref: "#/components/parameters/OrgID" }
+      - { $ref: "#/components/parameters/TemplateID" }
+      - { name: from, in: path, required: true, schema: { type: integer } }
+      - { name: to, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [templates]
+      summary: Permisos agregados y quitados entre dos versiones
+      x-permission: { permissions: ["template:read"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Diff, content: { application/json: { schema: { type: object, properties: { added: { type: array, items: { type: string } }, removed: { type: array, items: { type: string } } } } } } }
+  /orgs/{orgID}/groups:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [groups]
+      summary: Grupos de la organizacion
+      x-permission: { permissions: ["group:read"], scope: org, tokens: denied }
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/GroupPage" } } } }
+    post:
+      tags: [groups]
+      summary: Crear grupo
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/GroupInput" } } } }
+      responses:
+        "201": { description: Creado, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/groups/{groupID}:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/GroupID" } ]
+    get:
+      tags: [groups]
+      summary: Grupo con sus asignaciones
+      x-permission: { permissions: ["group:read"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Grupo, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [groups]
+      summary: Renombrar o cambiar descripcion
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/GroupInput" } } } }
+      responses:
+        "200": { description: Actualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
+    delete:
+      tags: [groups]
+      summary: Archivar el grupo (sus asignaciones dejan de contar)
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      responses:
+        "204": { description: Archivado }
+  /orgs/{orgID}/groups/{groupID}/members:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/GroupID" } ]
+    get:
+      tags: [groups]
+      summary: Miembros del grupo
+      x-permission: { permissions: ["group:read"], scope: org, tokens: denied }
+      parameters: [ { $ref: "#/components/parameters/Cursor" } ]
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/GroupMemberPage" } } } }
+    post:
+      tags: [groups]
+      summary: Agregar miembros (concesion: regla de no-escalada, SPEC 13.1)
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_ids]
+              properties:
+                user_ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+                expires_at: { type: [string, "null"], format: date-time }
+      responses:
+        "200": { description: Miembros resultantes, content: { application/json: { schema: { $ref: "#/components/schemas/GroupMemberPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{orgID}/groups/{groupID}/members/{userID}:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/GroupID" }, { $ref: "#/components/parameters/UserID" } ]
+    delete:
+      tags: [groups]
+      summary: Quitar a una persona del grupo
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      responses:
+        "204": { description: Quitada }
+  /orgs/{orgID}/assignments:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [assignments]
+      summary: Asignaciones (filtrables por sujeto, alcance y plantilla)
+      x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      parameters:
+        - { name: subject_type, in: query, schema: { type: string, enum: [user, group] } }
+        - { name: subject_id, in: query, schema: { type: string, format: uuid } }
+        - { name: scope_type, in: query, schema: { type: string, enum: [org, project, repo, env] } }
+        - { name: scope_id, in: query, schema: { type: string, format: uuid } }
+        - { name: template_id, in: query, schema: { type: string, format: uuid } }
+        - { name: expiring_within, in: query, schema: { type: string, example: 7d } }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/AssignmentPage" } } } }
+    post:
+      tags: [assignments]
+      summary: Crear asignacion
+      description: |
+        Requiere `assignment:grant` EN el alcance de la asignacion y contener los permisos de la plantilla (no-escalada). Para alcance
+        project/repo/env la autorizacion se evalua sobre ese alcance aunque la ruta sea de organizacion.
+      x-permission: { permissions: ["assignment:grant"], scope: org, tokens: denied, sensitive: true, note: "se re-evalua en el alcance de la asignacion" }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AssignmentInput" } } } }
+      responses:
+        "201": { description: Creada, content: { application/json: { schema: { $ref: "#/components/schemas/Assignment" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/assignments/{assignmentID}:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { name: assignmentID, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      tags: [assignments]
+      summary: Una asignacion
+      x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Asignacion, content: { application/json: { schema: { $ref: "#/components/schemas/Assignment" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [assignments]
+      summary: Cambiar caducidad, razon o version fijada
+      description: Cambiar la plantilla es revocar y crear (queda auditado como dos eventos con el mismo `change_id`).
+      x-permission: { permissions: ["assignment:grant"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expires_at: { type: [string, "null"], format: date-time }
+                reason: { type: string, maxLength: 500 }
+                pinned_version: { type: [integer, "null"] }
+      responses:
+        "200": { description: Actualizada, content: { application/json: { schema: { $ref: "#/components/schemas/Assignment" } } } }
+    delete:
+      tags: [assignments]
+      summary: Revocar
+      x-permission: { permissions: ["assignment:grant"], scope: org, tokens: denied, sensitive: true }
+      responses:
+        "204": { description: Revocada }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{orgID}/projects/{projectID}/access:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/ProjectID" } ]
+    get:
+      tags: [assignments]
+      summary: Quien tiene acceso al proyecto, con origen (floor, base, directa, grupo) y permisos efectivos
+      description: Sustituye en la UI a `GET .../members`, que se conserva por compatibilidad.
+      x-permission: { permissions: ["assignment:read"], scope: project, tokens: denied }
+      parameters: [ { $ref: "#/components/parameters/Cursor" } ]
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAccessPage" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{orgID}/projects/{projectID}/access-override:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/ProjectID" } ]
+    put:
+      tags: [access]
+      summary: Sobrescribir el modo de acceso del proyecto (open, restricted, o null para heredar de la organizacion)
+      description: Pasar a restricted calcula quien perderia visibilidad; sin `confirm=true` responde 409 WOULD_HIDE con la lista (incluido el actor).
+      x-permission: { permissions: ["org:access-policy"], scope: org, tokens: denied, sensitive: true }
+      parameters: [ { name: confirm, in: query, schema: { type: boolean, default: false } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [mode], properties: { mode: { type: [string, "null"], enum: [open, restricted, null] } } } } }
+      responses:
+        "200": { description: Aplicado, content: { application/json: { schema: { type: object, properties: { mode: { type: [string, "null"] }, effective_mode: { type: string } } } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{orgID}/users/{userID}/permissions:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/UserID" } ]
+    get:
+      tags: [access]
+      summary: Permisos efectivos de otra persona (org, proyectos o un proyecto concreto)
+      x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      parameters:
+        - { name: project, in: query, schema: { type: string, format: uuid } }
+        - { name: expand, in: query, schema: { type: string, enum: [projects] } }
+      responses:
+        "200": { description: Permisos, content: { application/json: { schema: { $ref: "#/components/schemas/MyPermissions" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{orgID}/access/simulate:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    post:
+      tags: [access]
+      summary: Puede X hacer Y sobre Z, y por que
+      x-permission: { permissions: ["assignment:read"], scope: org, tokens: denied }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SimulateRequest" } } } }
+      responses:
+        "200": { description: Decision con rastro, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/members/{userID}/status:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/UserID" } ]
+    put:
+      tags: [access]
+      summary: Suspender o reactivar a una persona en esta organizacion
+      description: Conserva asignaciones y grupos. El ultimo owner no se suspende (409 LAST_OWNER). Un admin no suspende a un owner.
+      x-permission: { permissions: ["member:suspend"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [active, suspended] }, reason: { type: string, maxLength: 500 } } } } }
+      responses:
+        "200": { description: Estado resultante, content: { application/json: { schema: { $ref: "#/components/schemas/OrgMember" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{orgID}/members/{userID}/template:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/UserID" } ]
+    put:
+      tags: [access]
+      summary: Cambiar la plantilla de organizacion de una persona (`owner` solo por transferencia o por otro owner)
+      description: Equivale a `PATCH /members/{id}` con `role`; este admite plantillas personalizadas (requiere `custom_roles`). No-escalada aplicada.
+      x-permission: { permissions: ["member:update"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [template], properties: { template: { type: string, description: "slug de plantilla kind=org" } } } } }
+      responses:
+        "200": { description: Miembro, content: { application/json: { schema: { $ref: "#/components/schemas/OrgMember" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{orgID}/invitations:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [invitations]
+      summary: Invitaciones
+      x-permission: { permissions: ["member:invite"], scope: org, tokens: denied }
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, accepted, expired, revoked] } }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/InvitationPage" } } } }
+    post:
+      tags: [invitations]
+      summary: Invitar por correo (con o sin cuenta)
+      x-permission: { permissions: ["member:invite"], scope: org, tokens: denied, sensitive: true }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/InvitationInput" } } } }
+      responses:
+        "201": { description: Creada (el token solo se envia por correo, no se devuelve), content: { application/json: { schema: { $ref: "#/components/schemas/Invitation" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/invitations/{invitationID}:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { name: invitationID, in: path, required: true, schema: { type: string, format: uuid } } ]
+    delete:
+      tags: [invitations]
+      summary: Revocar
+      x-permission: { permissions: ["member:invite"], scope: org, tokens: denied }
+      responses:
+        "204": { description: Revocada }
+  /orgs/{orgID}/invitations/{invitationID}/resend:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { name: invitationID, in: path, required: true, schema: { type: string, format: uuid } } ]
+    post:
+      tags: [invitations]
+      summary: Reenviar (nuevo token, nueva caducidad)
+      x-permission: { permissions: ["member:invite"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Reenviada, content: { application/json: { schema: { $ref: "#/components/schemas/Invitation" } } } }
+  /invitations/accept:
+    post:
+      tags: [invitations]
+      summary: Aceptar una invitacion (el usuario autenticado debe tener el correo verificado de la invitacion)
+      x-permission: { permissions: [], scope: self, tokens: denied }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } }
+      responses:
+        "200": { description: Membresia creada, content: { application/json: { schema: { $ref: "#/components/schemas/OrgMember" } } } }
+        "409": { description: "EMAIL_MISMATCH, ya aceptada, caducada o revocada" }
+  /orgs/{orgID}/ownership-transfer:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    post:
+      tags: [ownership]
+      summary: Proponer la transferencia de propiedad (reautenticacion obligatoria)
+      x-permission: { permissions: ["org:transfer"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [to_user_id, reauth], properties: { to_user_id: { type: string, format: uuid }, keep_owner: { type: boolean, default: false }, reauth: { type: object, properties: { password: { type: string, writeOnly: true }, totp: { type: string, writeOnly: true } } } } } } }
+      responses:
+        "202": { description: Pendiente de aceptacion, content: { application/json: { schema: { $ref: "#/components/schemas/OwnershipTransfer" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [ownership]
+      summary: Cancelar la transferencia pendiente
+      x-permission: { permissions: ["org:transfer"], scope: org, tokens: denied }
+      responses:
+        "204": { description: Cancelada }
+  /orgs/{orgID}/ownership-transfer/accept:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    post:
+      tags: [ownership]
+      summary: Aceptar la transferencia (solo el destinatario, con reautenticacion)
+      x-permission: { permissions: [], scope: self, tokens: denied, sensitive: true, note: "el destinatario nombrado en la transferencia" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [reauth], properties: { reauth: { type: object, properties: { password: { type: string, writeOnly: true }, totp: { type: string, writeOnly: true } } } } } } }
+      responses:
+        "200": { description: Propiedad transferida, content: { application/json: { schema: { $ref: "#/components/schemas/OwnershipTransfer" } } } }
+  /orgs/{orgID}/tokens:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [tokens]
+      summary: Metadatos de tokens de las personas de la organizacion (nunca el valor)
+      x-permission: { permissions: ["token:read-all"], scope: org, tokens: denied }
+      parameters:
+        - { name: created_by, in: query, schema: { type: string, format: uuid } }
+        - { name: kind, in: query, schema: { type: string, enum: [cap, cgt, cgs] } }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/TokenPage" } } } }
+  /orgs/{orgID}/tokens/{tokenID}:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { name: tokenID, in: path, required: true, schema: { type: string, format: uuid } } ]
+    delete:
+      tags: [tokens]
+      summary: Revocar un token ajeno (baja de personas, incidentes)
+      x-permission: { permissions: ["token:revoke-any"], scope: org, tokens: denied, sensitive: true }
+      responses:
+        "204": { description: Revocado }
+  /user/tokens:
+    post:
+      tags: [tokens]
+      summary: Crear token `cap_` con permisos atomicos (extension aditiva de la ruta actual)
+      description: |
+        Acepta `scopes` (heredado: `*`, `deploy`, `security:write`) O `permissions[]` + `org_id`, nunca ambos (422). Los permisos deben estar contenidos en
+        los efectivos del usuario en ese alcance (403 con `missing`) y ser tokenables. El valor del token solo se muestra al crearlo.
+      x-permission: { permissions: [], scope: self, tokens: denied }
+      x-compat: "ruta existente; los campos nuevos son aditivos"
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TokenInput" } } } }
+      responses:
+        "201": { description: Creado, content: { application/json: { schema: { $ref: "#/components/schemas/TokenCreated" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/access-audit:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [audit]
+      summary: Auditoria de cambios de acceso (vista filtrada de audit_logs con action access.*)
+      x-permission: { permissions: ["audit:read"], scope: org, tokens: denied }
+      parameters:
+        - { name: action, in: query, schema: { type: string, example: "access.assignment.*" } }
+        - { name: actor, in: query, schema: { type: string, format: uuid } }
+        - { name: subject, in: query, schema: { type: string, format: uuid }, description: "persona o grupo afectado" }
+        - { name: project, in: query, schema: { type: string, format: uuid } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: until, in: query, schema: { type: string, format: date-time } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv requiere ademas audit:export" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { description: Pagina, content: { application/json: { schema: { $ref: "#/components/schemas/AuditPage" } } } }
+  /orgs/{orgID}/group-sources:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [groups]
+      summary: Fuentes externas de grupos (solo si hay IdP externo; paquete P12, decision D8)
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Fuentes y reglas, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/GroupSource" } } } } } } }
+    put:
+      tags: [groups]
+      summary: Definir fuente y reglas `grupo externo -> grupo` (sin comodines)
+      x-permission: { permissions: ["group:manage"], scope: org, tokens: denied, sensitive: true }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/GroupSource" } } } }
+      responses:
+        "200": { description: Guardada, content: { application/json: { schema: { $ref: "#/components/schemas/GroupSource" } } } }
+        "422": { $ref: "#/components/responses/Validation" }
+  # ---- FASE P: repositorios publicos y contribucion externa (SPEC sec. 17) ----
+  /orgs/{orgID}/policy/public-repos:
+    parameters: [ { $ref: "#/components/parameters/OrgID" } ]
+    get:
+      tags: [public]
+      summary: Politica de repos publicos de la organizacion y repos publicos actuales
+      x-permission: { permissions: ["org:read"], scope: org, tokens: denied }
+      responses:
+        "200": { description: Politica, content: { application/json: { schema: { $ref: "#/components/schemas/PublicPolicy" } } } }
+    put:
+      tags: [public]
+      summary: Permitir o prohibir repos publicos (prohibir fuerza todos a privado)
+      description: Requiere reautenticacion y `confirm_slug` igual al slug de la organizacion.
+      x-permission: { permissions: ["org:public-repos-policy"], scope: org, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, confirm_slug, reauth]
+              properties:
+                mode: { type: string, enum: [forbidden, allowed] }
+                confirm_slug: { type: string }
+                public_repo_max_mb: { type: integer, minimum: 1, maximum: 2000, default: 500 }
+                public_release_assets: { type: boolean, default: false }
+                reauth: { type: object, properties: { password: { type: string, writeOnly: true }, totp: { type: string, writeOnly: true } } }
+      responses:
+        "200": { description: Aplicada, content: { application/json: { schema: { $ref: "#/components/schemas/PublicPolicy" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/projects/{projectID}/git/visibility:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/ProjectID" } ]
+    get:
+      tags: [public]
+      summary: Visibilidad del repo y estado de publicacion
+      x-permission: { permissions: ["git:read"], scope: repo, tokens: allowed }
+      responses:
+        "200": { description: Estado, content: { application/json: { schema: { $ref: "#/components/schemas/RepoVisibility" } } } }
+    put:
+      tags: [public]
+      summary: Hacer publico o privado
+      description: |
+        `private` es inmediato y no pide reautenticacion. `public` exige politica `allowed`, un preflight reciente (<= 15 min) sin hallazgos criticos
+        (o `acknowledge_findings` de un owner), `confirm_repo` = `org/repo`, la casilla `acknowledge_irreversible` y reautenticacion.
+      x-permission: { permissions: ["repo:set-visibility"], scope: repo, tokens: denied, sensitive: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility: { type: string, enum: [private, public] }
+                preflight_id: { type: string, format: uuid }
+                confirm_repo: { type: string }
+                acknowledge_irreversible: { type: boolean }
+                acknowledge_findings: { type: boolean }
+                reauth: { type: object, properties: { password: { type: string, writeOnly: true }, totp: { type: string, writeOnly: true } } }
+      responses:
+        "200": { description: Aplicada, content: { application/json: { schema: { $ref: "#/components/schemas/RepoVisibility" } } } }
+        "409": { description: "PUBLIC_REPOS_FORBIDDEN, PREFLIGHT_BLOCKED, PREFLIGHT_STALE", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/Validation" }
+  /orgs/{orgID}/projects/{projectID}/git/visibility/preflight:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/ProjectID" } ]
+    post:
+      tags: [public]
+      summary: Escaneo previo a publicar (correos del historial, secretos, tamano, ficheros sensibles)
+      x-permission: { permissions: ["repo:set-visibility"], scope: repo, tokens: denied, sensitive: true }
+      responses:
+        "200": { description: Informe, content: { application/json: { schema: { $ref: "#/components/schemas/Preflight" } } } }
+  /orgs/{orgID}/projects/{projectID}/git/contributions:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/ProjectID" } ]
+    get:
+      tags: [public]
+      summary: PR externos del repo (para mantenedores)
+      x-permission: { permissions: ["git:read"], scope: repo, tokens: allowed }
+      responses:
+        "200": { description: Lista, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/Contribution" } } } } } } }
+  /orgs/{orgID}/projects/{projectID}/git/contributions/{number}/run-ci:
+    parameters: [ { $ref: "#/components/parameters/OrgID" }, { $ref: "#/components/parameters/ProjectID" }, { name: number, in: path, required: true, schema: { type: integer } } ]
+    post:
+      tags: [public]
+      summary: Ejecutar CI sin confianza (pool `untrusted`, sin secretos, workflows de la rama base)
+      x-permission: { permissions: ["ci:run"], scope: repo, tokens: denied, sensitive: true }
+      responses:
+        "202": { description: Encolado }
+        "409": { description: "UNTRUSTED_RUNNER_UNAVAILABLE o el fork tiene secretos", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/git/{org}/{repo}:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" } ]
+    get:
+      tags: [public]
+      summary: Resumen publico del repo (sin sesion)
+      description: Ruta del router publico (servida bajo `/api/v1`; la pagina es `https://app.tumi-ai.com/public/git/{org}/{repo}`). Repo no publico o politica prohibida => 404.
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      responses:
+        "200": { description: Resumen, headers: { ETag: { schema: { type: string } }, Cache-Control: { schema: { type: string } } }, content: { application/json: { schema: { $ref: "#/components/schemas/PublicRepo" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { description: Limite por IP, headers: { Retry-After: { schema: { type: integer } } } }
+  /public/git/{org}/{repo}/tree/{ref}/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/PubOrg" }
+      - { $ref: "#/components/parameters/PubRepo" }
+      - { name: ref, in: path, required: true, schema: { type: string } }
+      - { name: path, in: path, required: true, schema: { type: string }, allowEmptyValue: true }
+    get:
+      tags: [public]
+      summary: Arbol o fichero (blob <= 1 MiB; HTML/SVG como text/plain con CSP sandbox)
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      responses:
+        "200": { description: Contenido }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /public/git/{org}/{repo}/commits:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" } ]
+    get:
+      tags: [public]
+      summary: Commits (autor = nombre, nunca correo)
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      parameters: [ { name: ref, in: query, schema: { type: string } }, { $ref: "#/components/parameters/Cursor" } ]
+      responses:
+        "200": { description: Pagina }
+  /public/git/{org}/{repo}/branches:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" } ]
+    get:
+      tags: [public]
+      summary: Ramas y etiquetas
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      responses:
+        "200": { description: Lista }
+  /public/git/{org}/{repo}/readme:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" } ]
+    get:
+      tags: [public]
+      summary: README renderizado y saneado
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      responses:
+        "200": { description: HTML saneado }
+  /public/git/{org}/{repo}/releases:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" } ]
+    get:
+      tags: [public]
+      summary: Releases (notas y archivos de fuente; binarios solo con public_release_assets)
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      responses:
+        "200": { description: Lista }
+  /public/git/{org}/{repo}/archive/{ref}:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" }, { name: ref, in: path, required: true, schema: { type: string } } ]
+    get:
+      tags: [public]
+      summary: Archivo zip o tar.gz de una referencia (cupo de clon, tope 200 MB)
+      security: []
+      x-permission: { permissions: ["repo:read-public"], scope: public, tokens: denied, principal: [anonymous, external] }
+      parameters: [ { name: format, in: query, schema: { type: string, enum: [zip, tar.gz], default: tar.gz } } ]
+      responses:
+        "200": { description: Archivo }
+        "429": { description: Limite }
+  /public/auth/github/start:
+    get:
+      tags: [public]
+      summary: Inicia el login externo con GitHub (state + PKCE)
+      security: []
+      x-permission: { permissions: [], scope: public, tokens: denied, principal: [anonymous] }
+      parameters: [ { name: return_to, in: query, schema: { type: string }, description: "solo rutas bajo /public/git/" } ]
+      responses:
+        "302": { description: Redireccion a GitHub }
+  /public/auth/github/callback:
+    get:
+      tags: [public]
+      summary: Retorno de GitHub; crea la sesion externa (cookie __Host-capsule_ext, Path=/public)
+      security: []
+      x-permission: { permissions: [], scope: public, tokens: denied, principal: [anonymous] }
+      responses:
+        "302": { description: Vuelve a la vista publica }
+        "403": { description: Identidad bloqueada o state invalido }
+  /public/auth/session:
+    get:
+      tags: [public]
+      summary: Quien soy en el contexto publico (login de GitHub y permisos del principal)
+      security: [ { externalSession: [] } ]
+      x-permission: { permissions: [], scope: public, tokens: denied, principal: [anonymous, external] }
+      responses:
+        "200": { description: Principal, content: { application/json: { schema: { type: object, properties: { principal: { type: string, enum: [anonymous, external] }, github: { type: object, properties: { id: { type: integer }, login: { type: string }, avatar_url: { type: string } } }, permissions: { type: array, items: { type: string } } } } } } }
+    delete:
+      tags: [public]
+      summary: Cerrar la sesion externa
+      security: [ { externalSession: [] } ]
+      x-permission: { permissions: [], scope: public, tokens: denied, principal: [external] }
+      responses:
+        "204": { description: Cerrada }
+  /public/git/{org}/{repo}/contributions:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" } ]
+    get:
+      tags: [public]
+      summary: Mis contribuciones a este repo (solo las del propio externo)
+      security: [ { externalSession: [] } ]
+      x-permission: { permissions: ["pr:open-external"], scope: public, tokens: denied, principal: [external] }
+      responses:
+        "200": { description: Lista, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/Contribution" } } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [public]
+      summary: Abrir un PR externo (traer rama de tu GitHub, o subir un parche)
+      description: |
+        Entrada `github`: `owner` debe ser el login autenticado; host fijo github.com. Entrada `patch`: mbox <= 1 MiB. Se materializa en el fork
+        aislado `capsule-ext/<org>--<repo>`; no concede ningun permiso. Requiere token CSRF (`X-CSRF-Token`). Limites: 5 abiertos sin fusionar, 20 comentarios/hora.
+      security: [ { externalSession: [] } ]
+      x-permission: { permissions: ["pr:open-external"], scope: public, tokens: denied, principal: [external] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, source]
+              properties:
+                title: { type: string, maxLength: 120 }
+                body: { type: string, maxLength: 10000 }
+                source:
+                  oneOf:
+                    - type: object
+                      required: [type, owner, repo, branch]
+                      properties: { type: { const: github }, owner: { type: string }, repo: { type: string }, branch: { type: string } }
+                    - type: object
+                      required: [type, patch]
+                      properties: { type: { const: patch }, patch: { type: string, maxLength: 1048576 } }
+      responses:
+        "201": { description: PR creado, content: { application/json: { schema: { $ref: "#/components/schemas/Contribution" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+        "429": { description: Limite }
+  /public/git/{org}/{repo}/contributions/{number}/comments:
+    parameters: [ { $ref: "#/components/parameters/PubOrg" }, { $ref: "#/components/parameters/PubRepo" }, { name: number, in: path, required: true, schema: { type: integer } } ]
+    get:
+      tags: [public]
+      summary: Conversacion de mi contribucion (solo comentarios marcados visibles para quien contribuye)
+      security: [ { externalSession: [] } ]
+      x-permission: { permissions: ["pr:open-external"], scope: public, tokens: denied, principal: [external] }
+      responses:
+        "200": { description: Comentarios }
+    post:
+      tags: [public]
+      summary: Comentar en mi contribucion (Markdown saneado; lo publica el bot como @github:login)
+      security: [ { externalSession: [] } ]
+      x-permission: { permissions: ["pr:open-external"], scope: public, tokens: denied, principal: [external] }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [body], properties: { body: { type: string, maxLength: 5000 } } } } } }
+      responses:
+        "201": { description: Publicado }
+        "429": { description: Limite }
+  /internal/git-public-auth:
+    get:
+      tags: [public]
+      summary: INTERNO (Caddy forward_auth). 2xx con X-WEBAUTH-USER=capsule-anon solo si el repo es publico y la IP no esta limitada
+      description: No expuesto por el borde publico; exige el secreto compartido `X-Capsule-Git-Auth`. 404 en cualquier otro caso (no filtra existencia).
+      security: []
+      x-permission: { permissions: [], scope: public, tokens: denied, principal: [anonymous], note: "interno, secreto compartido" }
+      parameters:
+        - { name: X-Forwarded-Uri, in: header, required: true, schema: { type: string } }
+        - { name: X-Forwarded-For, in: header, schema: { type: string } }
+      responses:
+        "200": { description: Permitido, headers: { X-WEBAUTH-USER: { schema: { type: string, const: capsule-anon } } } }
+        "404": { description: No publico o politica prohibida }
+        "429": { description: Limite }
+components:
+  securitySchemes:
+    externalSession:
+      type: apiKey
+      in: cookie
+      name: __Host-capsule_ext
+      description: Sesion externa de GitHub; solo vale bajo /public (Path=/public), nunca en el dashboard.
+    bearer:
+      type: http
+      scheme: bearer
+      description: JWT de sesion o token `cap_`. Los tokens acotados solo pasan en rutas con `tokens: allowed` y cuyos permisos lleven.
+  parameters:
+    OrgID: { name: orgID, in: path, required: true, schema: { type: string, format: uuid } }
+    ProjectID: { name: projectID, in: path, required: true, schema: { type: string, format: uuid } }
+    TemplateID: { name: templateID, in: path, required: true, schema: { type: string, format: uuid } }
+    GroupID: { name: groupID, in: path, required: true, schema: { type: string, format: uuid } }
+    UserID: { name: userID, in: path, required: true, schema: { type: string, format: uuid } }
+    PubOrg: { name: org, in: path, required: true, schema: { type: string }, description: "slug de la organizacion" }
+    PubRepo: { name: repo, in: path, required: true, schema: { type: string }, description: "slug del proyecto" }
+    Cursor: { name: cursor, in: query, schema: { type: string }, description: "paginacion por cursor; `limit` 1-200 (50 por defecto)" }
+  responses:
+    Unauthorized: { description: No autenticado, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Forbidden: { description: No miembro o permiso insuficiente, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    NotFound: { description: No existe o no es visible para el actor, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Conflict: { description: Invariante o conflicto, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Validation: { description: Validacion, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: "FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, CONFLICT, ... (los actuales)" }
+            message: { type: string }
+            details:
+              type: object
+              properties:
+                code: { type: string, enum: [PERMISSION_DENIED, TOKEN_SCOPE, LAST_OWNER, MIXED_ASSIGNMENTS, SYSTEM_TEMPLATE, WOULD_HIDE, EMAIL_MISMATCH, ESCALATION, OUT_OF_SCOPE] }
+                permission: { type: string }
+                missing: { type: array, items: { type: string } }
+                reason: { type: string, enum: [no_grant, ceiling, suspended, token_scope, expired] }
+                fields: { type: object, additionalProperties: { type: string } }
+                missing_dependencies: { type: array, items: { type: string } }
+                out_of_scope: { type: array, items: { type: string } }
+                unknown_permissions: { type: array, items: { type: string } }
+                would_hide: { type: array, items: { $ref: "#/components/schemas/UserRef" } }
+    UserRef:
+      type: object
+      properties: { id: { type: string, format: uuid }, email: { type: string }, name: { type: string } }
+    CatalogEntry:
+      type: object
+      required: [id, scopes, group, sensitive]
+      properties:
+        id: { type: string, pattern: "^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$" }
+        scopes: { type: array, items: { type: string, enum: [org, project, repo, env, platform] } }
+        group: { type: string }
+        sensitive: { type: boolean }
+        tokenable: { type: boolean }
+        requires: { type: array, items: { type: string } }
+        legacy: { type: array, items: { type: string }, description: "acciones viejas de las que deriva (project.ops, ...)" }
+        since: { type: integer }
+        deprecated: { type: boolean }
+        label: { type: object, additionalProperties: { type: string } }
+        description: { type: object, additionalProperties: { type: string } }
+    MyPermissions:
+      type: object
+      required: [catalog_version, epoch, org]
+      properties:
+        catalog_version: { type: integer }
+        epoch: { type: integer }
+        user: { type: object, properties: { id: { type: string, format: uuid }, status: { type: string } } }
+        platform: { type: array, items: { type: string } }
+        org:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            slug: { type: string }
+            status: { type: string, enum: [active, suspended] }
+            template: { type: object, properties: { slug: { type: string }, version: { type: integer }, label: { type: string }, system: { type: boolean } } }
+            permissions: { type: array, items: { type: string } }
+        project_default: { type: array, items: { type: string } }
+        aggregate: { type: array, items: { type: string } }
+        permissions: { type: array, items: { type: string }, description: "solo con ?project=" }
+        catalog_index: { type: array, items: { type: string }, description: "orden de bits de las mascaras (solo con expand=projects)" }
+        projects:
+          type: object
+          description: "solo con expand=projects; clave = project_id"
+          additionalProperties:
+            type: object
+            properties:
+              mask: { type: string, description: "hex, bit i = catalog_index[i]" }
+              source: { type: string, enum: [org, explicit, inherited] }
+    Decision:
+      type: object
+      required: [allowed, reason, trace]
+      properties:
+        allowed: { type: boolean }
+        reason: { type: string, enum: [granted, not_member, hidden, suspended, no_grant, ceiling, token_scope, expired, unknown_permission] }
+        permission: { type: string }
+        scope: { $ref: "#/components/schemas/ScopeRef" }
+        trace:
+          type: array
+          items:
+            type: object
+            required: [step, result]
+            properties:
+              step: { type: string, enum: [account, membership, org_template, floor, policy, base, org_wide_assignment, project_assignment, group_assignment, repo_assignment, env_assignment, approver, ceiling, token, final] }
+              result: { type: string, enum: [grants, adds, replaces, none, cuts, denies, passes, info] }
+              detail: { type: string }
+              permissions: { type: array, items: { type: string } }
+              assignment_id: { type: [string, "null"], format: uuid }
+              template: { type: object, properties: { slug: { type: string }, version: { type: integer } } }
+              via_group: { type: [object, "null"], properties: { id: { type: string }, slug: { type: string } } }
+              expires_at: { type: [string, "null"], format: date-time }
+              granted_by: { $ref: "#/components/schemas/UserRef" }
+        what_if_diff: { type: object, properties: { gains: { type: array, items: { type: string } }, loses: { type: array, items: { type: string } } } }
+    ScopeRef:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [org, project, repo, env] }
+        id: { type: string, format: uuid }
+    SimulateRequest:
+      type: object
+      required: [user_id, permission]
+      properties:
+        user_id: { type: string, format: uuid }
+        permission: { type: string }
+        scope: { $ref: "#/components/schemas/ScopeRef" }
+        token_id: { type: string, format: uuid, description: "aplica ademas el techo de ese token" }
+        what_if:
+          type: object
+          description: "solo asignaciones hipoteticas, sin lenguaje de reglas"
+          properties:
+            add_assignments: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/AssignmentInput" } }
+            remove_assignment_ids: { type: array, maxItems: 20, items: { type: string, format: uuid } }
+    Template:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [org, project, repo] }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        system: { type: boolean }
+        cloned_from: { type: [string, "null"], format: uuid }
+        current_version: { type: integer }
+        archived: { type: boolean }
+        permissions: { type: array, items: { type: string } }
+        ceiling: { type: [array, "null"], items: { type: string } }
+        floor_template: { type: [string, "null"] }
+        base_template: { type: [string, "null"] }
+        unknown_permissions: { type: array, items: { type: string } }
+        usage: { type: object, properties: { users: { type: integer }, groups: { type: integer }, projects: { type: integer } } }
+    TemplateInput:
+      type: object
+      required: [kind, slug, name, permissions]
+      properties:
+        kind: { type: string, enum: [org, project, repo] }
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,39}$" }
+        name: { type: string, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        permissions: { type: array, minItems: 1, maxItems: 200, items: { type: string } }
+        ceiling: { type: [array, "null"], items: { type: string } }
+        floor_template: { type: [string, "null"] }
+        base_template: { type: [string, "null"] }
+        cloned_from: { type: [string, "null"], format: uuid }
+        note: { type: string, maxLength: 300 }
+    TemplateVersion:
+      type: object
+      properties:
+        version: { type: integer }
+        permissions: { type: array, items: { type: string } }
+        note: { type: string }
+        created_by: { $ref: "#/components/schemas/UserRef" }
+        created_at: { type: string, format: date-time }
+    PublishResult:
+      type: object
+      properties:
+        published: { type: boolean }
+        template: { $ref: "#/components/schemas/Template" }
+        impact:
+          type: object
+          properties:
+            users: { type: integer }
+            groups: { type: integer }
+            projects: { type: integer }
+            gains: { type: array, items: { type: string } }
+            loses: { type: array, items: { type: string } }
+    Group:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        source: { type: string, enum: [manual, oidc] }
+        members: { type: integer }
+        assignments: { type: array, items: { $ref: "#/components/schemas/Assignment" } }
+        archived: { type: boolean }
+    GroupInput:
+      type: object
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,39}$" }
+        name: { type: string, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+    GroupPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: "#/components/schemas/Group" } }, next_cursor: { type: [string, "null"] } }
+    GroupMemberPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties: { user: { $ref: "#/components/schemas/UserRef" }, source: { type: string }, added_at: { type: string, format: date-time }, expires_at: { type: [string, "null"], format: date-time } }
+        next_cursor: { type: [string, "null"] }
+    Assignment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject: { type: object, properties: { type: { type: string, enum: [user, group] }, id: { type: string, format: uuid }, label: { type: string } } }
+        scope: { $ref: "#/components/schemas/ScopeRef" }
+        scope_label: { type: string }
+        template: { type: object, properties: { id: { type: string, format: uuid }, slug: { type: string }, kind: { type: string }, version: { type: integer }, pinned: { type: boolean } } }
+        source: { type: string, enum: [manual, migrated, legacy-api, approver, oidc, temporary] }
+        reason: { type: string }
+        expires_at: { type: [string, "null"], format: date-time }
+        status: { type: string, enum: [active, expired, revoked] }
+        created_by: { $ref: "#/components/schemas/UserRef" }
+        created_at: { type: string, format: date-time }
+    AssignmentInput:
+      type: object
+      required: [subject_type, subject_id, scope, template_id]
+      properties:
+        subject_type: { type: string, enum: [user, group] }
+        subject_id: { type: string, format: uuid }
+        scope: { $ref: "#/components/schemas/ScopeRef" }
+        template_id: { type: string, format: uuid }
+        pinned_version: { type: [integer, "null"] }
+        expires_at: { type: [string, "null"], format: date-time }
+        reason: { type: string, maxLength: 500 }
+    AssignmentPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: "#/components/schemas/Assignment" } }, next_cursor: { type: [string, "null"] } }
+    ProjectAccessPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              user: { $ref: "#/components/schemas/UserRef" }
+              org_template: { type: string }
+              legacy_role: { type: string, enum: [admin, deployer, viewer, ""] }
+              source: { type: string, enum: [org, explicit, inherited] }
+              via: { type: array, items: { type: object, properties: { kind: { type: string, enum: [floor, base, direct, group, repo, env] }, label: { type: string }, template: { type: string }, expires_at: { type: [string, "null"], format: date-time } } } }
+              permissions_count: { type: integer }
+        mode: { type: string, enum: [open, restricted] }
+        next_cursor: { type: [string, "null"] }
+    OrgMember:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/UserRef" }
+        role: { type: string, description: "etiqueta heredada owner|admin|member|readonly" }
+        template: { type: object, properties: { slug: { type: string }, version: { type: integer }, system: { type: boolean } } }
+        status: { type: string, enum: [active, suspended] }
+        groups: { type: array, items: { type: string } }
+        joined_at: { type: string, format: date-time }
+    InvitationInput:
+      type: object
+      required: [email, template]
+      properties:
+        email: { type: string, format: email }
+        template: { type: string, description: "slug kind=org; owner no se puede invitar" }
+        group_ids: { type: array, maxItems: 20, items: { type: string, format: uuid } }
+        assignments: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/AssignmentInput" } }
+        expires_in_days: { type: integer, minimum: 1, maximum: 30, default: 7 }
+        message: { type: string, maxLength: 500 }
+    Invitation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        template: { type: string }
+        status: { type: string, enum: [pending, accepted, expired, revoked] }
+        expires_at: { type: string, format: date-time }
+        invited_by: { $ref: "#/components/schemas/UserRef" }
+        group_ids: { type: array, items: { type: string, format: uuid } }
+        assignments_count: { type: integer }
+    InvitationPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: "#/components/schemas/Invitation" } }, next_cursor: { type: [string, "null"] } }
+    OwnershipTransfer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        from: { $ref: "#/components/schemas/UserRef" }
+        to: { $ref: "#/components/schemas/UserRef" }
+        status: { type: string, enum: [pending, accepted, cancelled, expired] }
+        keep_owner: { type: boolean }
+        expires_at: { type: string, format: date-time }
+    TokenInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        scopes: { type: string, description: "heredado; excluyente con permissions" }
+        permissions: { type: array, maxItems: 99, items: { type: string } }
+        org_id: { type: string, format: uuid, description: "obligatorio con permissions" }
+        project_id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+    TokenCreated:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        token: { type: string, description: "valor `cap_...`, se muestra una sola vez" }
+        permissions: { type: array, items: { type: string } }
+        scopes: { type: string }
+        expires_at: { type: [string, "null"], format: date-time }
+    TokenPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              kind: { type: string, enum: [cap, cgt, cgs] }
+              name: { type: string }
+              prefix: { type: string }
+              created_by: { $ref: "#/components/schemas/UserRef" }
+              permissions: { type: array, items: { type: string } }
+              project_id: { type: [string, "null"], format: uuid }
+              last_used_at: { type: [string, "null"], format: date-time }
+              expires_at: { type: [string, "null"], format: date-time }
+        next_cursor: { type: [string, "null"] }
+    AuditPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              action: { type: string }
+              actor: { $ref: "#/components/schemas/UserRef" }
+              actor_label: { type: string }
+              resource_type: { type: string }
+              resource_id: { type: [string, "null"], format: uuid }
+              project_id: { type: [string, "null"], format: uuid }
+              old_values: { type: [object, "null"] }
+              new_values: { type: [object, "null"] }
+              metadata: { type: object }
+              ip_address: { type: [string, "null"] }
+              created_at: { type: string, format: date-time }
+        next_cursor: { type: [string, "null"] }
+    PublicPolicy:
+      type: object
+      properties:
+        mode: { type: string, enum: [forbidden, allowed] }
+        public_repo_max_mb: { type: integer }
+        public_release_assets: { type: boolean }
+        public_repos: { type: array, items: { type: object, properties: { project_id: { type: string, format: uuid }, repo: { type: string }, since: { type: string, format: date-time } } } }
+    RepoVisibility:
+      type: object
+      properties:
+        visibility: { type: string, enum: [private, public] }
+        policy: { type: string, enum: [forbidden, allowed] }
+        public_url: { type: [string, "null"] }
+        changed_by: { $ref: "#/components/schemas/UserRef" }
+        changed_at: { type: [string, "null"], format: date-time }
+    Preflight:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+        size_mb: { type: number }
+        author_emails: { type: array, items: { type: string } }
+        secret_findings: { type: array, items: { type: object, properties: { severity: { type: string, enum: [critical, high, medium] }, path: { type: string }, rule: { type: string } } } }
+        large_files: { type: array, items: { type: string } }
+        sensitive_names: { type: array, items: { type: string } }
+        internal_hosts: { type: array, items: { type: string } }
+        blocking: { type: boolean }
+    PublicRepo:
+      type: object
+      properties:
+        org: { type: string }
+        repo: { type: string }
+        description: { type: string }
+        default_branch: { type: string }
+        languages: { type: object, additionalProperties: { type: number } }
+        license: { type: [string, "null"] }
+        clone_url: { type: string, description: "https://git.tumi-ai.com/{org}/{repo}.git (solo lectura anonima)" }
+    Contribution:
+      type: object
+      properties:
+        number: { type: integer }
+        title: { type: string }
+        state: { type: string, enum: [open, merged, closed] }
+        github: { type: object, properties: { id: { type: integer }, login: { type: string } } }
+        provenance: { type: object, properties: { url: { type: string }, sha: { type: string } } }
+        ci: { type: string, enum: [not_run, queued, running, passed, failed] }
+        created_at: { type: string, format: date-time }
+    GroupSource:
+      type: object
+      properties:
+        issuer: { type: string, format: uri }
+        claim_name: { type: string, default: groups }
+        enabled: { type: boolean }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [external_group, group_id]
+            properties:
+              external_group: { type: string }
+              group_id: { type: string, format: uuid }
+              allow_privileged: { type: boolean, default: false, description: "solo un owner puede ponerlo" }
