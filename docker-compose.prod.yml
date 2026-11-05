@@ -33,6 +33,11 @@ services:
       - ALB_LISTENER_ARN=${ALB_LISTENER_ARN:-}
       - VPC_ID=${VPC_ID:-}
       - APPS_DOMAIN=${APPS_DOMAIN:-}
+      # Ingress without ALB: DNS target shown to customers adding a custom domain (see docs/ingress-without-alb.md)
+      - CAPSULE_INGRESS=${CAPSULE_INGRESS:-}
+      - CAPSULE_INGRESS_HOST=${CAPSULE_INGRESS_HOST:-}
+      - CAPSULE_INGRESS_IPV4=${CAPSULE_INGRESS_IPV4:-}
+      - CAPSULE_INGRESS_IPV6=${CAPSULE_INGRESS_IPV6:-}
       - ECR_REGISTRY=${ECR_REGISTRY:-}
       - ALB_DNS_NAME=${ALB_DNS_NAME:-}
       - PUBLIC_HOST=${PUBLIC_HOST:-}

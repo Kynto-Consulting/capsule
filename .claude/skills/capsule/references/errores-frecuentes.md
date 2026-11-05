@@ -54,3 +54,4 @@ Primero mira el **código de salida** (tabla en `instalacion-login.md`), luego e
 Regla general: si un comando falla y no entiendes por qué, ejecuta `capsule <comando> --help`, `capsule platform` y
 `capsule whoami`, y reporta al usuario el mensaje exacto (sin secretos). No pruebes variaciones al azar sobre
 recursos de producción.
+| La app en Capsule no alcanza su base (`P1001`, timeout) y la lista de IP de la base no tiene la IP del servidor | Desde dentro del servidor la IP/nombre público no responde (no hay retorno a la propia IP pública); abrir una regla para la IP del servidor no sirve | Conectar por `host.docker.internal:<puerto de la base>` con `sslmode=require` (contenedores creados desde el despliegue de 2026-11-05; antes, `172.17.0.1:<puerto>`) y quitar la regla de la IP del servidor |

@@ -74,3 +74,7 @@ rutas responden 501 `NOT_CONFIGURED`. Evento de webhook: `deployment.connection_
 Detección estática por patrones (un host construido en tiempo de ejecución solo se ve con la observación en
 ejecución); solo el `.gitignore` de la raíz; no reconoce `jdbc:oracle:thin:@...` ni listas de hosts con comas; la
 observación en ejecución solo aplica a deployments docker en el host (no Fargate, Lambda ni static).
+
+## Apps y bases en el mismo servidor (2026-11-05)
+
+Desde dentro del servidor de Capsule la dirección pública (`db.tumi-ai.com`, la IP elástica) **no responde**: el tráfico hacia la propia IP pública no vuelve a entrar. Esto afecta también al nombre del gateway, que resuelve a la misma IP. Una app de Capsule que use una base del mismo servidor debe conectarse por `host.docker.internal:<puerto publicado de la base>` (Capsule lo mapea al host Docker en cada contenedor de app nuevo con `--add-host host.docker.internal:host-gateway`), con `sslmode=require`. No pasa por el firewall ni por la lista de IP, así que no hace falta ninguna regla para la IP del servidor. El informe lo clasifica como `OK` (info) cuando el puerto es uno publicado por Capsule. Fuera del servidor sigue valiendo el nombre del gateway. Verificado con `pg_isready` desde un contenedor: `db.tumi-ai.com:32768` sin respuesta; `172.17.0.1:32768` y la IP del contenedor, aceptando conexiones.
