@@ -1,0 +1,60 @@
+{
+  "name": "@kyntocg/capsule-fn",
+  "version": "0.1.0",
+  "description": "Librería de funciones de Capsule: defineFunction con ctx.vpn (SMB, SFTP, HTTP atados al túnel), ctx.api (token de corta vida, subidas reanudables por partes de 8 MiB), ctx.db y ctx.storage.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "examples",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "ssh2": "^1.15.0",
+    "@marsaud/smb2": "^0.18.0"
+  },
+  "peerDependenciesMeta": {
+    "ssh2": {
+      "optional": true
+    },
+    "@marsaud/smb2": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "bin": {
+    "capsule-fn": "./bin/capsule-fn.mjs"
+  }
+}
