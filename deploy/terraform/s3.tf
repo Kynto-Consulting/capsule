@@ -48,6 +48,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts_ai_stage" {
     }
   }
 
+  # the API deletes each staged file, which leaves a delete marker in a versioned bucket: clean the markers once no version is left
+  rule {
+    id     = "clean-ai-stage-delete-markers"
+    status = "Enabled"
+
+    filter {
+      prefix = "ai-stage/"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.artifacts]
 }
 
