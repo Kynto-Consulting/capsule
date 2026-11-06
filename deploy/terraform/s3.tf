@@ -26,6 +26,45 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
   }
 }
 
+# Audio waiting for Amazon Transcribe (docs/AI_MULTIMODAL.md): the API deletes each file when its job ends; this rule is the safety net
+# for jobs nobody polls again. Versioning is on, so old versions go too.
+resource "aws_s3_bucket_lifecycle_configuration" "artifacts_ai_stage" {
+  bucket = aws_s3_bucket.artifacts.id
+
+  rule {
+    id     = "expire-ai-stage"
+    status = "Enabled"
+
+    filter {
+      prefix = "ai-stage/"
+    }
+
+    expiration {
+      days = 1
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  # the API deletes each staged file, which leaves a delete marker in a versioned bucket: clean the markers once no version is left
+  rule {
+    id     = "clean-ai-stage-delete-markers"
+    status = "Enabled"
+
+    filter {
+      prefix = "ai-stage/"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.artifacts]
+}
+
 resource "aws_s3_bucket_public_access_block" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
 

@@ -69,7 +69,31 @@ resource "aws_iam_user_policy" "capsule_api" {
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:InvokeModelWithBidirectionalStream" # speech to speech (Nova Sonic), docs/AI_MULTIMODAL.md
+        ]
+        Resource = "*"
+      },
+      {
+        # Live model catalog and its access state (GET /ai/models?capability=)
+        Sid    = "BedrockCatalogRead"
+        Effect = "Allow"
+        Action = [
+          "bedrock:ListFoundationModels",
+          "bedrock:GetFoundationModelAvailability",
+          "bedrock:ListInferenceProfiles"
+        ]
+        Resource = "*"
+      },
+      {
+        # Speech to text (batch jobs; the audio is staged under ai-stage/ of the artifacts bucket, already covered above) and text to speech
+        Sid    = "TranscribeAndPolly"
+        Effect = "Allow"
+        Action = [
+          "transcribe:StartTranscriptionJob",
+          "transcribe:GetTranscriptionJob",
+          "polly:SynthesizeSpeech",
+          "polly:DescribeVoices"
         ]
         Resource = "*"
       },
