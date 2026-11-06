@@ -1,11 +1,11 @@
 import { createApi, PART_SIZE, type Api, type ResumableUpload } from "./api.js";
-import { createStorage, signV4, type Storage } from "./storage.js";
+import { createStorage, signV4, UPLOAD_PART_SIZE, type Storage, type Bucket, type ObjectInfo, type ListItem, type ListPage, type UploadOptions } from "./storage.js";
 import { createVpn, type Vpn } from "./vpn.js";
 import { relayConnect } from "./relay.js";
 import { lambdaHandler, type LambdaEvent, type LambdaResult } from "./lambda.js";
 
-export { PART_SIZE, signV4, relayConnect, lambdaHandler };
-export type { Api, ResumableUpload, Storage, Vpn, LambdaEvent, LambdaResult };
+export { PART_SIZE, UPLOAD_PART_SIZE, signV4, relayConnect, lambdaHandler };
+export type { Api, ResumableUpload, Storage, Bucket, ObjectInfo, ListItem, ListPage, UploadOptions, Vpn, LambdaEvent, LambdaResult };
 
 export interface Db {
   /** Connection URL of a project database granted by a `db:<name>` scope (internal route host.docker.internal:<port>). */
