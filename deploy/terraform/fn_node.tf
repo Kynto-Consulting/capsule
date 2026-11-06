@@ -51,6 +51,20 @@ data "aws_iam_policy_document" "fn_node" {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.artifacts.arn}/deploy/capsule-fn-agent.gz"]
   }
+  statement {
+    # `fn.Spec.Image` is whatever the user deployed with `capsule fn deploy`; when it is one of this
+    # account's own ECR repos (not Docker Hub or another public registry), the node must authenticate
+    # before `docker run` can pull it. GetAuthorizationToken has no resource-level permissions (AWS
+    # always returns InvalidParameterException "*" is required), so it must stay unscoped.
+    sid       = "ECRAuth"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "ECRPull"
+    actions   = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability"]
+    resources = ["arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "fn_node" {
@@ -117,11 +131,42 @@ resource "aws_instance" "fn_node" {
   user_data                   = <<-EOT
     #!/bin/bash
     set -euo pipefail
-    dnf install -y docker iproute iptables
+    dnf install -y docker iproute iptables git gcc make automake autoconf pkgconfig openssl-devel
     systemctl enable --now docker
     mkdir -p /opt/capsule /run/capsule/fn
+
+    # openfortivpn: not in the AL2023 repos (EPEL/Fedora/Debian only), so build it once at launch.
+    # kernel.go shells out to the "openfortivpn" binary by name; it must land on PATH (/usr/local/bin).
+    if ! command -v openfortivpn >/dev/null; then
+      git clone --depth 1 https://github.com/adrienverge/openfortivpn.git /opt/openfortivpn-src
+      cd /opt/openfortivpn-src && ./autogen.sh && ./configure --prefix=/usr/local && make -j2 && make install
+      cd / && rm -rf /opt/openfortivpn-src
+    fi
+
     aws s3 cp s3://capsule-artifacts-${var.aws_account_id}/deploy/capsule-fn-agent.gz /opt/capsule/capsule-fn-agent.gz --region ${var.aws_region}
     gunzip -f /opt/capsule/capsule-fn-agent.gz && chmod 755 /opt/capsule/capsule-fn-agent
+
+    # Function images may live in this account's own ECR (capsule fn deploy --image <acct>.dkr.ecr...): refresh the
+    # docker login before the 12h token expires. A function image on Docker Hub or another public registry needs
+    # none of this; `docker run` already pulls those without any login.
+    cat >/etc/systemd/system/capsule-ecr-login.service <<UNIT
+    [Unit]
+    Description=Refresh this node's docker login to this account's ECR
+    [Service]
+    Type=oneshot
+    ExecStart=/bin/bash -c 'aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com'
+    UNIT
+    cat >/etc/systemd/system/capsule-ecr-login.timer <<UNIT
+    [Unit]
+    Description=Run capsule-ecr-login every 6 hours
+    [Timer]
+    OnBootSec=30
+    OnUnitActiveSec=6h
+    [Install]
+    WantedBy=timers.target
+    UNIT
+    systemctl daemon-reload && systemctl enable --now capsule-ecr-login.timer
+
     cat >/etc/systemd/system/capsule-fn-agent.service <<UNIT
     [Unit]
     Description=Capsule functions work node

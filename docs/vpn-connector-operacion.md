@@ -41,6 +41,12 @@ Para A falta (cuando el usuario apruebe): recurso Terraform análogo a `runner.t
 que instala Docker y el agente con el token del nodo desde SSM, y la generalización de `ciwake` para encender el nodo ante una corrida en cola
 (`fn_runs.status='queued'` hace más de 30 s y nodo detenido).
 
+El `user_data` de `deploy/terraform/fn_node.tf` ya compila `openfortivpn` desde el código fuente (Amazon Linux 2023 no lo trae en sus
+repos) y renueva el login de Docker a ECR de esta cuenta cada 6 horas (el rol del nodo tiene permiso de lectura de cualquier repo de
+este registro). Nada de esto hace falta si la imagen de la función vive en Docker Hub u otro registro público.
+El runtime por defecto (`container`, corre en este nodo) basta para una función con túnel: el runtime `lambda` igual necesita el nodo
+vivo para el túnel (ver 5b.), así que no simplifica nada aquí.
+
 ## 4. Salud, reconexión, interruptor
 
 * El agente reporta cada tunel cada 10 s (`up` si hubo apretón de manos en los últimos 3 min); `capsule vpn status` y el panel lo muestran.
