@@ -114,7 +114,7 @@ resource "aws_instance" "fn_node" {
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 8
+    volume_size           = 30 # the AMI's root snapshot requires at least this much
     encrypted             = true
     delete_on_termination = true
   }
