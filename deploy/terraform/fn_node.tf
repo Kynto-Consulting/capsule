@@ -167,7 +167,9 @@ resource "aws_instance" "fn_node" {
     UNIT
     systemctl daemon-reload && systemctl enable --now capsule-ecr-login.timer
 
-    cat >/etc/systemd/system/capsule-fn-agent.service <<UNIT
+    # 'UNIT' entre comillas: sin ellas bash expandía $(aws ssm get-parameter ...) al crear el nodo, antes de existir el token, y
+    # la unidad quedaba con CAPSULE_NODE_TOKEN= vacío (06-nov-2026). Las ${var.*} las resuelve Terraform antes, no bash.
+    cat >/etc/systemd/system/capsule-fn-agent.service <<'UNIT'
     [Unit]
     Description=Capsule functions work node
     After=docker.service network-online.target
