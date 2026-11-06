@@ -53,3 +53,17 @@ sftp -o ProxyCommand="capsule connect --stdio capsule://mi-proyecto/sftp" -o Hos
   de lectura anónima solo por HTTP; por SFTP siempre hace falta secreto o clave.
 - Sin shell, exec, reenvío de puertos ni agente; sin enlaces simbólicos; 10 min de inactividad, 40 MiB/s por conexión, 8 conexiones por bucket.
 - Permisos: ver las claves `storage:read`; registrarlas o quitarlas `storage:manage`.
+
+## Montar el almacén como disco (rclone)
+
+Sin probar en producción (rclone no estaba instalado en el equipo de pruebas). Dos caminos; las claves salen de
+`capsule storage show <bucket> --reveal`.
+
+```bash
+# S3 (path-style, firma v4): host público del proyecto
+rclone config create capsule s3 provider=Other endpoint=https://<proyecto>-storage.apps.tumi-ai.com \
+  access_key_id=<clave> secret_access_key=<secreto> force_path_style=true region=us-east-1
+rclone mount capsule:<bucket> ~/capsule-disco --vfs-cache-mode writes     # Windows: requiere WinFsp
+
+# SFTP: usa los comandos de conexión que muestra `capsule storage show` (sección SFTP)
+```
