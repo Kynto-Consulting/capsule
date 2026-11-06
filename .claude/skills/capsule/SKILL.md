@@ -30,7 +30,7 @@ seguridad, entornos con aprobaciones y respaldos. Este archivo solo enruta y fij
 | Puertos TCP/UDP extra, lista de IPs de la app, `--my-ip` | `references/puertos-firewall.md` |
 | Acceso externo a bases de datos | `references/bases-acceso-externo.md` |
 | IPv4 e IPv6 (qué se acepta, qué falta activar) | `references/ipv6.md` |
-| Túnel VPN a la red de un cliente (`capsule vpn`), funciones en el túnel (`capsule fn`), `@kyntocg/capsule-fn`, tokens `capfn_` | `references/vpn-funciones.md` |
+| Túnel VPN a la red de un cliente (`capsule vpn`), funciones en el túnel (`capsule fn`, imagen construida por Capsule con `--source`, `fn build/builds/build-log`), `@kyntocg/capsule-fn` (`upload` multiparte, `head`, `list`), tokens `capfn_` | `references/vpn-funciones.md` |
 | Compartir puertos o una red entre máquinas, publicar una web local, escanear una red, UDP, `tunnel share/connect/scan/install/release` | `references/tunel.md` |
 | Backups, restauración, `recover`, manifiestos | `references/backups-recuperacion.md` |
 | Git Capsule: clone, ramas, PR, revisión, merge, protección, auto-merge, tokens Git, SSH | `references/git-capsule.md` |

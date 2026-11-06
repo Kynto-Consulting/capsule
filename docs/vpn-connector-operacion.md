@@ -14,7 +14,7 @@ Diseño: `docs/vpn-connector.md`. Skill: `.claude/skills/capsule/references/vpn-
 
 ```bash
 # en el backend (una vez por nodo; imprime el token capnode_ una sola vez)
-docker exec capsule-backend /app/server fn-node nodo-1
+docker exec capsule-backend /capsule-server fn-node nodo-1   # en producción el binario es /capsule-server (no /app/server)
 ```
 
 En el nodo (Linux con Docker; para fortigate/ipsec/openvpn además `iproute2`, `iptables` y las herramientas del proveedor):
@@ -90,3 +90,27 @@ terraform apply fn_node.tfplan
 Después: desplegar el backend con la migración `000073` (binario por S3, sin compilar en el host), `server fn-node nodo-1`, guardar el token con
 `aws ssm put-parameter --name /capsule/fn-node/token --type SecureString --value capnode_...`, reiniciar el servicio (`aws ssm start-session` al nodo:
 `systemctl restart capsule-fn-agent`) y comprobar `capsule vpn status` y `journalctl -u capsule-fn-agent`. El plan guardado `fn_node.tfplan` ya existe en esa carpeta.
+
+## 7. Builds de imágenes de funciones (`capsule fn deploy --source`)
+
+Ver `docs/vpn-connector.md` 7b. Corren en el host `capsule-builder` dentro del worker de despliegue, en la misma cola que los despliegues
+(uno a la vez); no hace falta nada en el nodo ni en AWS a mano: el backend crea `capsule/fn-<id>` en ECR con sus permisos (`ecr:*`).
+Requisito: el backend con AWS configurado (`awsClients.ECR`) y la migración `000077_fn_builds` (se aplica sola al arrancar).
+Revisión: `capsule fn builds <nombre>`, `capsule fn build-log <id>`; en el host, `docker logs capsule-backend | grep "function build"`.
+
+## 8. Desplegar backend y CLI (lo hace el usuario; nunca compilar Go en el host)
+
+El SSH de administración del host está en el puerto **2200** (el 22 es el SSH de Git de Forgejo). El binario del backend en producción es
+**`/capsule-server`** (imagen `capsule/server`, `ENTRYPOINT ["/capsule-server"]`), no `/app/server`.
+
+1. Backend, cross-compile en el PC (PowerShell, desde `backend`):
+   `$env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"; go build -trimpath -ldflags "-s -w" -o capsule-server .\cmd\server; Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED`
+2. Comprimir y subir: `7z a -tgzip capsule-server.gz capsule-server` y
+   `aws s3 cp capsule-server.gz s3://capsule-artifacts-598806201852/deploy/capsule-server.gz --profile tumi-admin`.
+3. En el host (`ssh -p 2200 …`), sin ningún build en curso (`pgrep -f "docker build"` vacío y `capsule deployments list` sin `building`):
+   etiquetar la imagen actual para volver atrás, bajar el `.gz`, `docker build` de un Dockerfile mínimo
+   (`FROM alpine` + `RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-buildx nodejs npm zip git` + `COPY capsule-server /capsule-server`
+   + `ENTRYPOINT ["/capsule-server"]`) etiquetado como `capsule/server:latest` del ECR, y `docker compose -f docker-compose.prod.yml up -d --no-deps backend`.
+   Nunca `up` del gateway. La migración `000077_fn_builds` se aplica sola al arrancar.
+4. CLI (desde `cli`): `foreach ($t in "windows/amd64","linux/amd64","darwin/arm64") { $o,$a = $t.Split("/"); $env:GOOS=$o; $env:GOARCH=$a; $env:CGO_ENABLED="0"; go build -trimpath -o "dist\capsule-$o-$a$(if($o -eq 'windows'){'.exe'})" .\cmd\capsule }`
+   y publicar como las versiones anteriores del CLI.

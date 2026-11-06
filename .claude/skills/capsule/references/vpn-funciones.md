@@ -32,6 +32,9 @@ La función **nunca** recibe las credenciales: las usa el gateway.
 ```bash
 capsule fn deploy migrar --image registry/migrar:1 --vpn estudio --cron "0 2 * * *" --memory 512m --timeout 2h \
   --scope api:importacion --scope storage:biblioteca
+capsule fn deploy copiar --source ./copiar --runtime lambda --vpn estudio --scope storage:biblioteca
+                                # Capsule construye el Dockerfile y lo publica en su ECR (capsule/fn-<id>); sigue el log
+capsule fn build copiar --source ./copiar   # imagen nueva;  capsule fn builds copiar;  capsule fn build-log <id> --follow
 capsule fn run migrar           # disparo por API;  capsule fn enqueue migrar  = disparo por cola
 capsule fn runs migrar          # historial: quién, estado, bytes
 capsule fn logs <run-id>        # cola del log (secretos ocultos);  capsule fn cancel <run-id>
@@ -57,7 +60,7 @@ export default defineFunction(async (ctx) => {
 
 `ctx.api.fetch` envía el token `capfn_…` de la corrida (corta vida, vive timeout+5 min, muere al terminar). La app lo valida con
 `POST /api/v1/fn/tokens/introspect {"token":"capfn_…"}` → `{active, scopes, function, run_id, expires_at}` y exige el alcance exacto.
-`ctx.db` entrega `postgres://…@host.docker.internal:<puerto>/…` (ruta interna); `ctx.storage` usa el almacén de objetos del proyecto.
+`ctx.db` entrega `postgres://…@host.docker.internal:<puerto>/…` (ruta interna); `ctx.storage` usa el almacén de objetos del proyecto: `put`/`get`, `upload(key, AsyncIterable|Uint8Array, {size, contentType, metadata, partSize})` multiparte por streaming, `head` → `{size, metadata, …}|null`, `list(prefix, {after, limit})` → `{items, next}`. En Lambda el endpoint es el público `https://<slug>-storage.apps.tumi-ai.com` (llega en el payload). `--source` exige `Dockerfile`; para `--runtime lambda` debe terminar en `FROM public.ecr.aws/lambda/nodejs`. Sin imagen aún: `run` da 409 `NO_IMAGE`.
 
 ## Permisos
 
@@ -72,3 +75,5 @@ Se reutilizan los átomos existentes: `network:read|manage` (túnel; `manage` es
 | `connection ... refused by the gateway (outside the declared networks)` | el destino no está en las `--cidr`; el SDK solo acepta IP, no nombres |
 | `this function is not attached to a VPN tunnel` | se desplegó sin `--vpn` |
 | corrida en cola que no arranca | otra corrida de la misma función está activa (concurrencia 1), el túnel está apagado, o el nodo de trabajo está detenido |
+| 409 `NO_IMAGE` al correr | la función se desplegó con `--source` y su build está en cola, corriendo o falló: `capsule fn builds <nombre>` |
+| build falla "final stage ... AWS Lambda base image" | con `--runtime lambda` el Dockerfile debe terminar en `FROM public.ecr.aws/lambda/nodejs:22` |

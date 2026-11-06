@@ -135,7 +135,7 @@ After a successful `terraform apply`, the `summary` output contains:
 
    ```bash
    docker compose -f docker-compose.prod.yml exec backend \
-     /app/capsule-server migrate up
+     /capsule-server migrate up
    ```
 
 ---

@@ -202,3 +202,55 @@ credenciales también por el `Payload`, no por `Environment`.
 
 **Qué falta.** Cron por EventBridge Scheduler hacia la Lambda (hoy el cron lo dispara el `Tick` del backend y lo despacha `DispatchLambda`, que
 basta mientras el backend esté vivo). Lambda real en AWS no se ha ejecutado: la prueba usa la API de Lambda simulada con el mismo contrato.
+
+## 7b. Imagen construida por Capsule (`capsule fn deploy --source`) y `ctx.storage` en Lambda
+
+Rama `feat/fn-build-source` (backend, cli y superproyecto). Sin AWS a mano: ni `aws ecr`, ni Terraform, ni el PC del desarrollador.
+
+**Flujo.** `capsule fn deploy <nombre> --source <dir> [--runtime lambda|container] ...` (en lugar de `--image`):
+1. el CLI exige un `Dockerfile` en la raíz de `<dir>`, empaqueta el directorio igual que `capsule deploy` (respeta `.gitignore`, omite
+   `.git` y `node_modules`) y lo sube a la URL prefirmada de `POST …/fn/uploads` (bucket de artefactos, clave `fn-builds/<proyecto>/<id>.tar.gz`);
+2. `POST …/fn/functions` con `source_key` crea la función **sin imagen** y encola su primer build (tabla `fn_builds`, migración `000077`);
+3. el worker de despliegue del backend lo toma en **el mismo bucle** que los despliegues de proyectos (`DeployWorker.Run`: primero
+   `processNext`, después `processFnBuild`), así que **nunca hay dos builds a la vez en el host**, y con los mismos límites
+   (`runLimitedBuild`: `CAPSULE_BUILD_TIMEOUT_MINUTES`, memoria, compuerta de concurrencia). Construye `linux/amd64`;
+4. publica en el repositorio ECR que Capsule administra para la función, **`capsule/fn-<12 hex del id de la función>`** (etiquetas
+   inmutables `b-<12 hex del build>`, escaneo al subir, ciclo de vida que guarda las 10 últimas, política que deja a Lambda leer de
+   `capsule-fn-*`), y fija la función al **digest** subido (`…/capsule/fn-xxxx@sha256:…`). La copia local se borra (`docker rmi`);
+5. con `--runtime lambda` la Lambda `capsule-fn-<id>` se crea o actualiza **en el build** (una imagen que AWS no acepta falla el build,
+   no la primera corrida). `Ensure` espera a que la Lambda quede `Active` y sin actualización en curso antes de seguir o invocar.
+
+Reglas: para `--runtime lambda` la última etapa del Dockerfile debe resolver a `public.ecr.aws/lambda/nodejs` o
+`amazon/aws-lambda-nodejs` (se siguen los alias `AS`; una base por `ARG` solo avisa). Para `--runtime container` vale cualquier base: el
+nodo hace `docker run` de la URI con digest y ya tiene permiso de lectura del ECR de la cuenta y su temporizador de login
+(`deploy/terraform/fn_node.tf`). Mientras la función no tenga imagen, `run`/`enqueue` responden 409 `NO_IMAGE` y el cron no la encola. Un build
+fallido deja la imagen anterior. Un solo build en curso por función (409). Un build cortado por un reinicio se reencola (máx. 3 intentos).
+`capsule fn delete` borra también el repositorio `capsule/fn-<id>`.
+
+Comandos: `capsule fn build <nombre> --source <dir>` (imagen nueva, conserva corridas), `capsule fn builds <nombre>`,
+`capsule fn build-log <id> [--follow]`; `deploy --source` y `build` siguen el log hasta el final (exit 1 si falla) salvo `--no-wait`.
+
+API (prefijo del proyecto): `POST /fn/uploads` (`worker:manage`), `POST /fn/functions` con `source_key` (responde la función con `build`),
+`POST /fn/functions/{name}/builds {source_key}` (`worker:manage`), `GET /fn/functions/{name}/builds` (`worker:read`),
+`GET /fn/builds/{buildID}` con el log (`log:read`). Auditoría (`audit_logs`, `resource_type=function`): `fn.deploy`, `fn.delete`,
+`fn.build.queued`, `fn.build.succeeded`, `fn.build.failed`.
+
+Dockerfile mínimo para Lambda:
+
+```dockerfile
+FROM public.ecr.aws/lambda/nodejs:22
+COPY package*.json ${LAMBDA_TASK_ROOT}/
+RUN npm ci --omit=dev
+COPY . ${LAMBDA_TASK_ROOT}/
+CMD ["index.handler"]   # index.mjs: export const handler = lambdaHandler(defineFunction(...))
+```
+
+**`ctx.storage` dentro de una Lambda.** Antes el alcance `storage:<nombre>` entregaba solo el endpoint interno
+`http://host.docker.internal:9000`, que no existe fuera del host. Ahora el resolvedor entrega también el público del proyecto
+`https://<slug>-storage.apps.tumi-ai.com` (path-style, el proxy solo sirve buckets de ese proyecto) y una corrida Lambda recibe ese como
+`CAPSULE_STORAGE_<NOMBRE>_ENDPOINT`, **en el payload del Invoke** (nunca en `Environment`); el contenedor del nodo sigue con el interno.
+Condición: si el proyecto tiene lista de IP, el host `-storage` también la aplica y una Lambda (IP de AWS variables) sería rechazada.
+
+**SDK.** `Bucket.upload` (multiparte por streaming), `head` con metadatos y `list` paginado: ver `packages/capsule-fn/README.md`. El
+almacén propio guarda ahora `x-amz-meta-*` (2 KB, como S3) en PUT y multiparte. Probado de extremo a extremo SDK → objstore real en
+`backend/internal/fn/storage_sdk_test.go` (firma SigV4 verificada por el servidor, 3 partes de 5 MiB + cola, abort, metadatos UTF-8, paginación).
