@@ -28,12 +28,16 @@ Capsule is a self-hosted cloud infrastructure management platform that lets team
 
 - **Deployments** — Build and deploy Docker containers from source archives; stream build logs in real time; cancel or roll back with one command
 - **Databases** — Provision and manage AWS RDS instances per project; connection strings delivered securely
-- **Storage** — Create and manage S3 buckets per project with pre-signed URL support
+- **Object Storage** — Capsule's own S3-compatible object store, with pre-signed URLs; no AWS account or bucket required (buckets created before this still work unchanged) — see `docs/OBJECT_STORAGE.md`
 - **Custom Domains** — Attach custom domains to projects with CNAME/A-record verification and ALB routing
 - **Email** — Configure AWS SES per project, verify domains, view DNS records, send transactional email, and inspect delivery logs
 - **Workers** — Long-running background processes managed alongside deployments
 - **Cron Jobs** — Scheduled tasks with execution logs and manual trigger support
+- **Functions + VPN Connector** — Deploy serverless functions (container or Lambda runtime) that reach a customer's private network over WireGuard, FortiGate, IPsec or OpenVPN, with per-tunnel connection/bandwidth limits and a full audit log; runs on a dedicated work node, never on the build host — see `docs/vpn-connector.md`
+- **Gateway** — Share TCP/UDP ports of a project's own services (e.g. a database) to the outside world, with a standard port pool and a pool for arbitrary UDP — see `docs/gateway/`
+- **Git Hosting** — Self-hosted Forgejo per account, with Actions CI on a Spot runner that scales to zero when idle — see `docs/git-capsule/README.md` and `docs/ci-runner-scale-to-zero.md`
 - **AI Assistance** — Bedrock-backed chat, Dockerfile generation, failure explanation, and cost-optimization suggestions; multimodal AI per project (speech to text, text to speech, speech to speech, images, embeddings, rerank, vision) in the API, `capsule ai` and the panel — see `docs/AI_MULTIMODAL.md`
+- **IPv6** — Optional dual-stack on the host, the ALB and deployed apps — see `docs/ipv6.md`
 - **Billing** — AWS spend and credits tracking dashboard
 - **Multi-tenant** — Organizations and projects with JWT-authenticated access
 - **Reverse Proxy** — Automatic subdomain and custom-domain routing to deployed apps
@@ -297,6 +301,13 @@ capsule/
 - [CLI Reference](docs/architecture/CLI_REFERENCE.md)
 - [Backend README](backend/README.md)
 - [Deploy README](deploy/README.md)
+- [VPN Connector + Functions](docs/vpn-connector.md) ([operation](docs/vpn-connector-operacion.md))
+- [Object Storage](docs/OBJECT_STORAGE.md)
+- [Git Hosting (Forgejo)](docs/git-capsule/README.md)
+- [Gateway](docs/gateway/PLAN.md)
+- [CI Runner (scale to zero)](docs/ci-runner-scale-to-zero.md)
+- [IPv6](docs/ipv6.md)
+- [AI Multimodal](docs/AI_MULTIMODAL.md)
 - [Contributing](CONTRIBUTING.md)
 
 ---
