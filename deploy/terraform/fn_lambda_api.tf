@@ -3,7 +3,7 @@
 # (`capsule-<12 hex>`) were already covered by capsule-api-policy; the function ones were not (first real build, 06-nov-2026:
 # AccessDeniedException on lambda:GetFunction for capsule-fn-948599dec066).
 #
-# Least privilege: only the six calls LambdaExecutor makes, only on capsule-fn-*, and PassRole only for capsule-lambda-role to
+# Least privilege: only the six calls LambdaExecutor makes (plus TagResource/ListTags: CreateFunction sends Tags), only on capsule-fn-*, and PassRole only for capsule-lambda-role to
 # Lambda. The image pull (ecr:BatchGetImage / GetDownloadUrlForLayer) is what CreateFunction/UpdateFunctionCode check on the caller,
 # only on the capsule/fn-* repositories the build creates. A separate managed policy: the existing ones are not touched (the
 # user's inline quota is full; see ci_runner_wake.tf).
@@ -18,6 +18,9 @@ data "aws_iam_policy_document" "capsule_api_fn_lambda" {
       "lambda:UpdateFunctionConfiguration",
       "lambda:InvokeFunction",
       "lambda:DeleteFunction",
+      # CreateFunction lleva Tags (capsule-fn, capsule-project): AWS lo autoriza como TagResource aparte.
+      "lambda:TagResource",
+      "lambda:ListTags",
     ]
     resources = ["arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:function:capsule-fn-*"]
   }
