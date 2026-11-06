@@ -22,6 +22,11 @@ tunnel connect --tunnel mi-pc --map db=15432,ssh=2222              # quien consu
 tunnel connect --tunnel oficina --forward 2222:192.168.1.67:22     # un host de la red compartida
 tunnel connect --tunnel oficina --forward 15353:192.168.1.67:53/udp
 tunnel scan    --tunnel oficina [--range 192.168.1.0/24 --ports 1-1024]   # puertos abiertos y banners
+tunnel ping    --tunnel oficina --host 192.168.1.67 [--count 4]           # ICMP real, no TCP
+tunnel trace   --tunnel oficina --host 192.168.1.67 [--hops 30]           # traceroute real
+tunnel arp     --tunnel oficina                                          # cache ARP del agente (pasivo, no sondea)
+tunnel dns     --tunnel oficina --dns-server 192.168.1.1 servidor.local   # resuelve con el DNS de esa LAN, no el tuyo
+tunnel expose  --tunnel oficina --name db --local 127.0.0.1:5432 --remote-port 19090   # al revés: tu puerto, visible en esa LAN
 tunnel install --name mi-pc --service db=5432     # vuelve solo (tarea programada, systemd de usuario o LaunchAgent)
 tunnel uninstall --name mi-pc
 tunnel release --name mi-pc                        # desconecta y libera el nombre
@@ -42,6 +47,23 @@ En PowerShell los parámetros llevan guion simple y las listas van con comas: `-
   comparten origen bajo `/t/<nombre>/`, por eso la sesión nunca debe ir en una cookie.
 - El panel muestra por túnel (solo al dueño) el equipo que comparte, quién consume, el registro de eventos y
   peticiones HTTP, y el tráfico acumulado; todo persiste en la base.
+
+## Herramientas de red reales (no solo TCP)
+
+- `ping` y `trace` hacen un ICMP/traceroute de verdad desde la máquina que comparte (`ping`/`tracert` o
+  `ping`/`traceroute` del sistema, según el SO), no un intento de conexión TCP; por eso sí sirven contra hosts que
+  no tienen ningún puerto abierto. No hace falta administrador/root más allá de lo que ya pide un ping normal de ese SO.
+- `arp` lee la caché ARP que el agente ya tiene (`arp -a` / `ip neigh`), filtrada a las redes compartidas; no sondea
+  la red, así que puede no mostrar nada si nadie habló con esos equipos hace poco (un `ping`/`scan` antes ayuda).
+- `dns` arma y manda la consulta DNS él mismo (A o `--type aaaa`), reusando el mismo túnel UDP que cualquier otro
+  servicio `udp:`; sirve para resolver nombres que solo existen en esa red (DNS interno de una oficina, por ejemplo).
+- `expose` es el sentido contrario a todo lo demás: en vez de alcanzar la LAN remota, hace que un servicio **tuyo**
+  (`--local host:puerto`) sea alcanzable desde ella, en el puerto que el agente abre (`--remote-port`, por defecto
+  en `0.0.0.0`). El agente nunca inicia una conexión hacia ti: por cada conexión que acepta en su LAN, abre un
+  WebSocket saliente nuevo hacia `/ws/expose-accept` y el servidor lo empareja con una de las conexiones idle que
+  `tunnel expose` mantiene abiertas (`/ws/expose`, 2 a la vez); si no hay ninguna esperando, esa conexión del lado
+  de la LAN simplemente se cierra. `--name` identifica la exposición (no el nombre del túnel); solo el dueño del
+  túnel puede usarlo.
 
 ## Detalles que importan
 
