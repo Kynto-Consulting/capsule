@@ -20,7 +20,9 @@
 
 ---
 
-Capsule is a self-hosted cloud infrastructure management platform that lets teams deploy containerized applications, provision managed databases and S3 storage, configure custom domains, set up transactional email, run background workers and cron jobs, and access AI-assisted tooling — all through a unified web dashboard, REST API, and CLI. It runs on AWS and is designed to be deployed on a single EC2 instance with Docker Compose.
+Capsule is a self-hosted Platform-as-a-Service: the deploy experience of Vercel/Heroku, running on your own AWS account instead of a vendor's. Push code and get a container running behind TLS on `<slug>.apps.yourdomain.com`, with a managed database, object storage, a built-in Git host and CI, and a dashboard, REST API, and CLI to drive all of it. It's designed to run on a single EC2 instance with Docker Compose — no Kubernetes, no managed-PaaS bill.
+
+What sets it apart from "just use Vercel": your data and containers never leave your AWS account, functions can reach *into* a customer's private network over a real VPN tunnel (WireGuard, FortiGate, IPsec, OpenVPN) instead of just calling public APIs, and the whole platform — Git hosting included — fits on one box you fully control.
 
 ---
 
@@ -47,33 +49,38 @@ Capsule is a self-hosted cloud infrastructure management platform that lets team
 ## Architecture
 
 ```
-Browser / CLI
-      │
-      ▼
-┌─────────────────┐     ┌──────────────────────┐
-│  Next.js 14     │────▶│  Go REST API (Chi)   │
-│  Dashboard      │     │  :8080               │
-└─────────────────┘     └──────────┬───────────┘
-                                   │
-               ┌───────────────────┼───────────────────┐
-               ▼                   ▼                   ▼
-        ┌─────────────┐   ┌───────────────┐   ┌────────────────┐
-        │ PostgreSQL  │   │   Redis 7     │   │   AWS          │
-        │ 16          │   │   (cache /    │   │   EC2, ECR,    │
-        └─────────────┘   │    sessions)  │   │   RDS, S3,     │
-                          └───────────────┘   │   SES, ALB,    │
-                                              │   Bedrock      │
-                                              └────────────────┘
+                         Browser / CLI / CI
+                                │
+                                ▼
+                   ┌─────────────────────┐     ┌─────────────────┐
+                   │  Next.js 14         │────▶│  Go REST API    │
+                   │  Dashboard          │     │  (Chi) :8080    │
+                   └─────────────────────┘     └────────┬────────┘
+                                                         │
+          ┌───────────────┬────────────────┬────────────┼────────────┬───────────────┐
+          ▼               ▼                ▼            ▼            ▼               ▼
+   ┌─────────────┐ ┌─────────────┐ ┌───────────────┐ ┌─────────┐ ┌─────────┐ ┌────────────────┐
+   │ PostgreSQL  │ │   Redis 7   │ │  Forgejo Git  │ │ Gateway │ │ fn work │ │   AWS          │
+   │ 16          │ │ (cache,     │ │  (own host)   │ │ (TCP/   │ │ node(s) │ │   EC2, ECR,    │
+   │             │ │  sessions)  │ │  + CI runner  │ │  UDP)   │ │ (VPN)   │ │   RDS, SES,    │
+   └─────────────┘ └─────────────┘ └───────────────┘ └─────────┘ └─────────┘ │   ALB, Bedrock │
+                                                                              └────────────────┘
 ```
 
-| Component    | Technology              | Purpose                                      |
-|--------------|-------------------------|----------------------------------------------|
-| **Backend**  | Go 1.22+, Chi router    | REST API, business logic, AWS orchestration  |
-| **Frontend** | Next.js 14, TypeScript  | Web dashboard, real-time log streaming       |
-| **CLI**      | Go 1.22+, Cobra/Viper   | Terminal interface, CI/CD automation         |
-| **Database** | PostgreSQL 16           | Persistent application state                 |
-| **Cache**    | Redis 7                 | Session storage, rate limiting, pub/sub      |
-| **Proxy**    | Traefik (dev) / ALB     | TLS termination, request routing             |
+Object storage is Capsule's own S3-compatible service, not an AWS dependency — see `docs/OBJECT_STORAGE.md`.
+
+| Component          | Technology                     | Purpose                                              |
+|--------------------|---------------------------------|------------------------------------------------------|
+| **Backend**        | Go 1.22+, Chi router            | REST API, business logic, AWS orchestration          |
+| **Frontend**       | Next.js 14, TypeScript          | Web dashboard, real-time log streaming               |
+| **CLI**            | Go 1.22+, Cobra/Viper            | Terminal interface, CI/CD automation                 |
+| **Database**       | PostgreSQL 16                   | Persistent application state                         |
+| **Cache**          | Redis 7                         | Session storage, rate limiting, pub/sub              |
+| **Git hosting**    | Forgejo (self-hosted)           | Repos, PRs, Actions CI, OIDC login via Capsule        |
+| **Object storage** | Capsule's own S3-compatible API | Buckets and pre-signed URLs, no AWS account needed   |
+| **Gateway**        | Go, host networking             | Named/tunneled TCP access and UDP to project services|
+| **Functions**      | Container or Lambda runtime     | Serverless with an optional VPN tunnel to a customer's LAN |
+| **Proxy**          | Traefik (dev) / ALB             | TLS termination, request routing                     |
 
 ---
 
@@ -172,6 +179,20 @@ capsule deployments list
 
 # Manage databases
 capsule databases list
+
+# Object storage (Capsule's own, S3-compatible — no AWS account needed)
+capsule storage create --name archivos
+capsule storage put ./report.pdf archivos/report.pdf
+
+# Reach a project's database or service through the gateway, no port to open
+capsule connect my-project/db --listen 127.0.0.1:5433
+
+# Self-hosted Git (Forgejo) and CI
+capsule git clone my-org/my-repo && cd my-repo
+capsule pr create --title "fix: ..." --body-file desc.md
+
+# A function that reaches into a customer's private network over VPN
+capsule fn deploy --source . --vpn my-tunnel
 ```
 
 ### Zero-config deploys
