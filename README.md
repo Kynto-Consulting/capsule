@@ -33,7 +33,7 @@ Capsule is a self-hosted cloud infrastructure management platform that lets team
 - **Email** — Configure AWS SES per project, verify domains, view DNS records, send transactional email, and inspect delivery logs
 - **Workers** — Long-running background processes managed alongside deployments
 - **Cron Jobs** — Scheduled tasks with execution logs and manual trigger support
-- **AI Assistance** — Bedrock-backed chat, Dockerfile generation, failure explanation, and cost-optimization suggestions
+- **AI Assistance** — Bedrock-backed chat, Dockerfile generation, failure explanation, and cost-optimization suggestions; multimodal AI per project (speech to text, text to speech, speech to speech, images, embeddings, rerank, vision) in the API, `capsule ai` and the panel — see `docs/AI_MULTIMODAL.md`
 - **Billing** — AWS spend and credits tracking dashboard
 - **Multi-tenant** — Organizations and projects with JWT-authenticated access
 - **Reverse Proxy** — Automatic subdomain and custom-domain routing to deployed apps
