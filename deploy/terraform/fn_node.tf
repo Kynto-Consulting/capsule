@@ -131,10 +131,20 @@ resource "aws_instance" "fn_node" {
   user_data                   = <<-EOT
     #!/bin/bash
     set -euo pipefail
-    dnf install -y docker iproute iptables git gcc make automake autoconf pkgconfig openssl-devel
+    dnf install -y docker iproute iptables git gcc make automake autoconf libtool pkgconfig openssl-devel tar gzip
     systemctl enable --now docker
     mkdir -p /opt/capsule /run/capsule/fn
 
+    # pppd: openfortivpn needs it to bring the tunnel interface up, and AL2023 does not package it either (06-nov-2026: the first
+    # real run failed with "tunnel interface did not come up"). Built from the ppp project (v2.5.1); the kernel modules exist.
+    if ! command -v pppd >/dev/null; then
+      curl -fsSL -o /tmp/ppp.tgz https://github.com/ppp-project/ppp/archive/refs/tags/v2.5.1.tar.gz
+      cd /tmp && tar xzf ppp.tgz && cd ppp-2.5.1 && ./autogen.sh && ./configure --prefix=/usr --sysconfdir=/etc && make -j2 && make install
+      cd / && rm -rf /tmp/ppp-2.5.1 /tmp/ppp.tgz
+    fi
+    printf '%s
+' ppp_generic ppp_async ppp_deflate > /etc/modules-load.d/ppp.conf
+    modprobe ppp_generic && modprobe ppp_async
     # openfortivpn: not in the AL2023 repos (EPEL/Fedora/Debian only), so build it once at launch.
     # kernel.go shells out to the "openfortivpn" binary by name; it must land on PATH (/usr/local/bin).
     if ! command -v openfortivpn >/dev/null; then
