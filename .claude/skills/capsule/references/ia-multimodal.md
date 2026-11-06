@@ -45,3 +45,11 @@ capsule ai usage                                                        # gasto 
 - Cada llamada queda en la auditoría de la organización (`ai.<capacidad>`) con modelo, tamaños y costo, **sin el contenido**. No pegues audios ni
   prompts sensibles en chats ni logs por tu cuenta.
 - La transcripción es asíncrona: `transcribe` espera y escribe el archivo; con `--no-wait` devuelve el id y se retoma con `capsule ai jobs <id> --wait`.
+
+## Usar `capsule ai` por API y con tokens (sin probar con token en producción)
+
+Las rutas son `POST /api/v1/orgs/{org}/projects/{proyecto}/ai/{chat|embeddings|embeddings/search|rerank|transcribe|speech|images|talk}`,
+`GET .../ai/{models|voices|usage|jobs/{id}}`. Se autentican con `Authorization: Bearer <token>`: la sesión de `capsule login` o un token `cap_`
+(`capsule tokens create --name x --project <id> [--scope ...]`; también en la web, Ajustes). `chat`, `embeddings`, `rerank`, `jobs` y `usage` piden el
+permiso `project:read`; `transcribe`, `speech`, `voices`, `images` y `talk` piden `storage:presign`. `talk --live` abre un WebSocket con un ticket
+de un solo uso (`POST .../ai/talk/ticket`). Un token con alcance (`--scope`) solo funciona si ese alcance incluye el permiso de la ruta.
