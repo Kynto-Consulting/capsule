@@ -4,6 +4,7 @@ import net from "node:net";
 import tls from "node:tls";
 import type { Readable } from "node:stream";
 import { socksConnect } from "./socks.js";
+import { relayConnect } from "./relay.js";
 
 export interface VpnHttpResponse {
   status: number;
@@ -53,12 +54,18 @@ export interface Vpn {
   smb(opts: SmbOptions): Promise<any>;
 }
 
-export function createVpn(socketPath: string | undefined): Vpn {
-  const need = (): string => {
-    if (!socketPath) throw new Error("this function is not attached to a VPN tunnel (deploy it with --vpn <name>)");
-    return socketPath;
+/**
+ * `socketPath` is the gateway's SOCKS endpoint of a container run; `relay` is how a Lambda run reaches the tunnel
+ * (CAPSULE_VPN_RELAY + the run token). A function deployed without `--vpn` has neither.
+ */
+export function createVpn(socketPath: string | undefined, relay?: { url: string; token: string }): Vpn {
+  const need = (): void => {
+    if (!socketPath && !relay) throw new Error("this function is not attached to a VPN tunnel (deploy it with --vpn <name>)");
   };
-  const connect = (host: string, port: number) => socksConnect(need(), host, port);
+  const connect = (host: string, port: number) => {
+    need();
+    return socketPath ? socksConnect(socketPath, host, port) : relayConnect(relay!.url, relay!.token, host, port);
+  };
 
   const forward: Vpn["forward"] = async (host, port) => {
     need();
@@ -177,5 +184,5 @@ export function createVpn(socketPath: string | undefined): Vpn {
     });
   };
 
-  return { attached: !!socketPath, connect, forward, http: httpFn, sftp, smb };
+  return { attached: !!(socketPath || relay), connect, forward, http: httpFn, sftp, smb };
 }

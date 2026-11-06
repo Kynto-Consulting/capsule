@@ -37,6 +37,10 @@ capsule fn runs migrar          # historial: quién, estado, bytes
 capsule fn logs <run-id>        # cola del log (secretos ocultos);  capsule fn cancel <run-id>
 ```
 
+`--runtime container` (por omisión) corre en el nodo sin tope de tiempo. `--runtime lambda` corre como su propia Lambda en lotes de 13 min:
+la función usa `lambdaHandler(...)`, respeta `ctx.batch.remainingMs()` y devuelve `{ continue: cursor }` para que Capsule la reinvoque con un token
+nuevo; llega al túnel por el relé de la API (sin NAT). Solo disponible si el backend tiene `CAPSULE_FN_LAMBDA=true`.
+
 Alcances explícitos (`api:<nombre>`, `storage:<nombre>`, `db:<nombre>`), sin comodines. Corren de a una por omisión
 (`--concurrency`), con memoria sin swap, CPU, tiempo máximo y sistema de archivos de solo lectura, en el **nodo de trabajo**, no en el host de builds.
 

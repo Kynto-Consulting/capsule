@@ -55,6 +55,13 @@ que instala Docker y el agente con el token del nodo desde SSM, y la generalizac
 * Por función: `max_concurrency` (1), memoria sin swap, CPU, `--pids-limit 256`, FS de solo lectura, sin capacidades, tiempo máximo.
 * Una función con cron no se apila: si ya hay una corrida en cola, no se encola otra.
 
+## 5b. Runtime `lambda` (opcional)
+
+Se enciende con `CAPSULE_FN_LAMBDA=true` en el backend; sin eso `capsule fn deploy --runtime lambda` se rechaza. Requisitos: una imagen de la
+función en ECR basada en una imagen Lambda de Node con `export const handler = lambdaHandler(defineFunction(...))` (`@kyntocg/capsule-fn`), y el
+rol `capsule-lambda-role`. Para funciones con túnel, el nodo de trabajo debe estar vivo: él mantiene el túnel y se adjunta al relé de la API
+(solo conexiones salientes; no se abre ningún puerto). Ver `docs/vpn-connector.md`, sección 7.
+
 ## 6. Pasos que ejecuta el usuario (AWS y producción)
 
 Requieren la sesión `aws login --profile tumi-admin`. En PowerShell, desde `deploy/terraform`:

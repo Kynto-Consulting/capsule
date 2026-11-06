@@ -1,9 +1,11 @@
 import { createApi, PART_SIZE, type Api, type ResumableUpload } from "./api.js";
 import { createStorage, signV4, type Storage } from "./storage.js";
 import { createVpn, type Vpn } from "./vpn.js";
+import { relayConnect } from "./relay.js";
+import { lambdaHandler, type LambdaEvent, type LambdaResult } from "./lambda.js";
 
-export { PART_SIZE, signV4 };
-export type { Api, ResumableUpload, Storage, Vpn };
+export { PART_SIZE, signV4, relayConnect, lambdaHandler };
+export type { Api, ResumableUpload, Storage, Vpn, LambdaEvent, LambdaResult };
 
 export interface Db {
   /** Connection URL of a project database granted by a `db:<name>` scope (internal route host.docker.internal:<port>). */
@@ -16,8 +18,23 @@ export interface Logger {
   error(...a: unknown[]): void;
 }
 
+/** Resumable batches (functions with `--runtime lambda`; on the container runtime there is a single batch with no limit). */
+export interface Batch {
+  /** 0 for the first invocation of a run. */
+  attempt: number;
+  /** The cursor the previous batch returned in `{ continue: cursor }`; undefined on the first batch. */
+  cursor: unknown;
+  /** Milliseconds this batch may run (Infinity on the container runtime). */
+  budgetMs: number;
+  /** Milliseconds left in this batch. Return `{ continue: cursor }` before it reaches 0. */
+  remainingMs(): number;
+  /** True when less than `marginMs` (default 60 s) is left: time to checkpoint and return `{ continue: cursor }`. */
+  shouldYield(marginMs?: number): boolean;
+}
+
 export interface Ctx {
   run: { id: string; function: string; scopes: string[] };
+  batch: Batch;
   payload: unknown;
   log: Logger;
   vpn: Vpn;
@@ -76,11 +93,25 @@ export function buildCtx(env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof
       payload = env.CAPSULE_PAYLOAD;
     }
   }
+  const started = Date.now();
+  const budgetMs = env.CAPSULE_BATCH_BUDGET_MS ? Number(env.CAPSULE_BATCH_BUDGET_MS) : Infinity;
+  let cursor: unknown = undefined;
+  if (env.CAPSULE_BATCH_CURSOR) {
+    try {
+      cursor = JSON.parse(env.CAPSULE_BATCH_CURSOR);
+    } catch {
+      cursor = env.CAPSULE_BATCH_CURSOR;
+    }
+  }
+  const remainingMs = () => Math.max(0, budgetMs - (Date.now() - started));
+  const batch: Batch = { attempt: Number(env.CAPSULE_BATCH_ATTEMPT ?? 0), cursor, budgetMs, remainingMs, shouldYield: (m = 60_000) => remainingMs() < m };
+  const relay = env.CAPSULE_VPN_RELAY && env.CAPSULE_TOKEN ? { url: env.CAPSULE_VPN_RELAY, token: env.CAPSULE_TOKEN } : undefined;
   return {
     run: { id: env.CAPSULE_RUN_ID ?? "", function: env.CAPSULE_FN ?? "", scopes },
+    batch,
     payload,
     log,
-    vpn: createVpn(env.CAPSULE_VPN_SOCKS),
+    vpn: createVpn(env.CAPSULE_VPN_SOCKS, relay),
     api: createApi(env.CAPSULE_API ?? "", env.CAPSULE_TOKEN ?? "", fetchImpl),
     db: {
       url(name: string) {

@@ -31,3 +31,18 @@ La función nunca recibe las credenciales del túnel: las usa el gateway. `ctx.v
 ```bash
 npm test      # node --test: gateway SOCKS local, subida reanudable, alcances, redacción, SigV4 contra el ejemplo de AWS
 ```
+
+## Runtime Lambda (`capsule fn deploy --runtime lambda`)
+
+```ts
+import { defineFunction, lambdaHandler } from "@kyntocg/capsule-fn";
+export const handler = lambdaHandler(defineFunction(async (ctx) => {
+  let i = (ctx.batch.cursor as number | undefined) ?? 0;
+  while (i < total) {
+    if (ctx.batch.shouldYield()) return { continue: i };   // Capsule re-invokes with this cursor and a new token
+    await procesar(i++);
+  }
+}));
+```
+
+Cada invocación es un lote de ≤13 min (`ctx.batch.remainingMs()`); el token `capfn_` llega en el evento, no en variables de entorno. `ctx.vpn` llega al túnel por el relé de la API (sin NAT).

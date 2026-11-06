@@ -168,6 +168,37 @@ función y TTL = tiempo restante de la corrida + 5 min, y lo pasa en el `Payload
 que son visibles en la consola de AWS). Se revoca al terminar el lote; cada lote tiene el suyo. `ctx.db` y `ctx.storage` entregan sus
 credenciales también por el `Payload`, no por `Environment`.
 
-**Estado.** Lo construido en las fases a-f (cola, tokens, concurrencia, kill switch, auditoría, SOCKS, WireGuard, SDK, CLI, panel) es
-independiente del ejecutor y se conserva. Falta: `LambdaExecutor`, el relé del gateway, la reanudación por lotes y el cron por Scheduler hacia
-la Lambda de la función. Esto toca infraestructura de AWS y el gateway de producción, así que **no se hace sin aprobación** del usuario.
+**Estado (construido, rama `feat/vpn-functions-lambda`).**
+
+- **Runtime por función.** `capsule fn deploy --runtime container|lambda` (columna `fn_functions.runtime`, migración `000075_fn_runtime`).
+  `container` (por omisión) sigue siendo la opción híbrida en el nodo, sin tope de 15 min. `lambda` ejecuta la función como su propia Lambda
+  `capsule-fn-<12 hex>` con el rol `capsule-lambda-role`; `--image` es entonces una URI de ECR de una imagen base Lambda.
+- **Interruptor.** El runtime `lambda` está apagado salvo `CAPSULE_FN_LAMBDA=true` en el backend (la primera corrida crea la Lambda en AWS);
+  apagado, `Deploy` lo rechaza con un mensaje claro. Con el relé nulo, una función Lambda con túnel también se rechaza.
+- **Ejecución.** Los nodos nunca reclaman corridas Lambda (`Claim` las salta). El backend las despacha (`DispatchLambda`, cada 5 s; `TryStart`
+  mantiene la concurrencia) y `LambdaExecutor.Run` invoca por lotes de a lo más 13 min con cursor (`{"continue": cursor}`); `ctx.batch` en el SDK.
+  Cada lote recibe un token `capfn_` nuevo **en el payload del Invoke** (jamás en `Environment`); al mintear el siguiente, el anterior se revoca.
+  La cola del log de la Lambda (`LogType=Tail`) se guarda con los secretos enmascarados.
+- **Relé** (`gateway.Relay`, `POST /api/v1/fn/relay/node/{tunnelID}` y `POST /api/v1/fn/relay/connect`). El nodo dueño del túnel mantiene 4
+  conexiones ociosas salientes hacia la API (token `capnode_`); la Lambda entra por HTTPS con su token `capfn_` y `X-Capsule-Dest: ip:puerto`.
+  La API valida el token, resuelve el túnel de la función, comprueba el destino contra las CIDR declaradas (fuera → 403 y evento
+  `denied_target` con función y corrida) y empareja con una conexión ociosa; el nodo vuelve a aplicar CIDR y topes compartidos. Ni la función
+  ni el relé ven credenciales del túnel; no hay NAT ni puerto entrante. Cuenta los bytes reales por corrida (prevalecen sobre lo que reporta la función).
+- **Dueño del túnel.** Una corrida Lambda con túnel solo arranca si hay un nodo vivo (reportó en los últimos 2 min) y se le asigna: ese nodo recibe
+  el túnel en la respuesta de `sync` y es el único que puede ofrecer conexiones. Un túnel WireGuard admite un solo extremo, por eso un solo dueño.
+  Sin nodo vivo la corrida espera en cola; si el nodo no se adjunta en 90 s la corrida falla con un mensaje.
+- **Kill switch.** Cancela las corridas, revoca tokens, corta las conexiones del relé y descarta las ociosas; el nodo detiene el túnel.
+- **Borrado.** `capsule fn delete` cancela corridas y borra la Lambda.
+
+**Límites de Lambda y decisiones.**
+
+| Límite | Decisión |
+|---|---|
+| 15 min por invocación | Lotes de 13 min con cursor; la función debe respetar `ctx.batch.remainingMs()`. Una función que no devuelve `continue` y excede 15 min la corta AWS y la corrida falla (se ve en el log). Para trabajos sin cursor: `--runtime container`. |
+| Cancelación | Una invocación en curso no se puede abortar en AWS: se corta su relé, se revoca su token y se deja de reinvocar; muere sola a lo más en 15 min sin ruta ni credenciales. |
+| Backend reiniciado a media corrida | El hilo del ejecutor se pierde; el `Tick` la marca `timeout` al vencer el timeout de la función + 5 min. La función es reanudable por cursor al relanzarla. |
+| Coste | Sin NAT ni VPC. Lambda se paga solo mientras corre (≈ USD 0,065 por una migración nocturna de 13 min a 512 MB). |
+| Tamaño del payload | El payload y el cursor viajan en el Invoke (6 MB); datos grandes van al almacén (`ctx.storage`), no al cursor. |
+
+**Qué falta.** Cron por EventBridge Scheduler hacia la Lambda (hoy el cron lo dispara el `Tick` del backend y lo despacha `DispatchLambda`, que
+basta mientras el backend esté vivo). Lambda real en AWS no se ha ejecutado: la prueba usa la API de Lambda simulada con el mismo contrato.
