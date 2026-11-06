@@ -47,6 +47,26 @@ este registro). Nada de esto hace falta si la imagen de la función vive en Dock
 El runtime por defecto (`container`, corre en este nodo) basta para una función con túnel: el runtime `lambda` igual necesita el nodo
 vivo para el túnel (ver 5b.), así que no simplifica nada aquí.
 
+### 3b. Nodo en la Local Zone de Lima (06-nov-2026)
+
+El FortiGate del estudio filtraba la IP del nodo (Virginia) y la TI no la iba a abrir. En vez de pedirle esa excepción,
+el nodo se movió a `us-east-1-lim-1a`: una Local Zone de AWS físicamente en Lima pero dentro de la misma cuenta/VPC/región
+`us-east-1` (solo es una subred nueva, `172.31.96.0/24`). Así el nodo sale con una IP peruana y, si el FortiGate solo
+filtra por país, puede entrar sin que nadie en el estudio toque nada.
+
+- `fn_node.tf` hace el opt-in a la zone group (`aws_ec2_availability_zone_group`, una vez por cuenta/región) y crea la
+  subred ahí; el resto (rol, SG, agente) no cambió.
+- La IP ahora es fija (`aws_eip` + `aws_eip_association`, output `fn_node_static_ip`): antes, al ser Spot con
+  `instance_interruption_behavior = "stop"`, el nodo perdía su IP pública cada vez que una interrupción lo detenía y
+  volvía a arrancar — habría roto cualquier regla de la TI basada en IP.
+- Se quitó el Spot: las Local Zones normalmente no tienen mercado Spot (antes del opt-in, `describe-instance-type-offerings`
+  en `us-east-1-lim-1a` no devolvió ningún tipo de instancia), y una interrupción además tira el túnel FortiGate. El nodo
+  ahora es on-demand; el costo por hora en la Local Zone suele ser mayor que en `us-east-1` normal.
+- Esto reemplaza la instancia existente (subred nueva = recrear, no hay forma de "mover" una instancia de AZ);
+  el plan guardado `fn_node.tfplan` quedó obsoleto, hay que generar uno nuevo. Tras el `apply`, el token guardado en
+  SSM sigue sirviendo (no cambia), pero el nodo vuelve a aparecer `offline` hasta que el agente levante de nuevo — es
+  normal, el `user_data` lo hace solo al arrancar. Dale la IP del output `fn_node_static_ip` a la TI del estudio.
+
 ## 4. Salud, reconexión, interruptor
 
 * El agente reporta cada tunel cada 10 s (`up` si hubo apretón de manos en los últimos 3 min); `capsule vpn status` y el panel lo muestran.

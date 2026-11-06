@@ -27,6 +27,41 @@ locals {
   fn_node_param_arn = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter${startswith(var.fn_node_token_param, "/") ? "" : "/"}${var.fn_node_token_param}"
 }
 
+# 06-nov-2026: movido a la Local Zone de Lima (us-east-1-lim-1, grupo propio dentro de us-east-1, requiere opt-in) para
+# que el nodo salga con una IP de Perú: el FortiGate del estudio puede entonces aceptarlo sin que su TI abra nada hacia
+# una IP de Virginia. Sigue siendo la misma VPC/cuenta; solo cambia la subred. Costo y catálogo de tipos de instancia
+# son distintos de la región "normal" (ver docs/vpn-connector-operacion.md): sin Spot (las Local Zones normalmente no
+# lo ofrecen) y con sobrecosto de on-demand frente a us-east-1.
+resource "aws_ec2_availability_zone_group" "lima" {
+  count         = local.fn_node_count
+  group_name    = "us-east-1-lim-1"
+  opt_in_status = "opted-in"
+}
+
+resource "aws_subnet" "fn_node_lima" {
+  count                   = local.fn_node_count
+  vpc_id                  = data.aws_vpc.default.id
+  availability_zone       = "us-east-1-lim-1a"
+  cidr_block              = "172.31.96.0/24" # libre: las subredes del default VPC solo usan 172.31.{0,16,32,48,64,80}.0/20
+  map_public_ip_on_launch = true
+  depends_on              = [aws_ec2_availability_zone_group.lima]
+  tags                    = { Name = "${var.app_name}-fn-node-lima", ManagedBy = "terraform", Component = "fn-node" }
+}
+
+# IP fija: antes el nodo perdía su IP pública cada vez que el Spot se detenía por interrupción y volvía a arrancar,
+# lo que habría roto cualquier regla de la TI del estudio basada en IP. Una Elastic IP no cambia mientras exista el recurso.
+resource "aws_eip" "fn_node" {
+  count  = local.fn_node_count
+  domain = "vpc"
+  tags   = { Name = "${var.app_name}-fn-node", ManagedBy = "terraform", Component = "fn-node" }
+}
+
+resource "aws_eip_association" "fn_node" {
+  count         = local.fn_node_count
+  instance_id   = aws_instance.fn_node[0].id
+  allocation_id = aws_eip.fn_node[0].id
+}
+
 resource "aws_iam_role" "fn_node" {
   count              = local.fn_node_count
   name               = "${var.app_name}-fn-node"
@@ -101,7 +136,7 @@ resource "aws_instance" "fn_node" {
   count                       = local.fn_node_count
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.fn_node_instance_type
-  subnet_id                   = data.aws_subnets.default.ids[0]
+  subnet_id                   = aws_subnet.fn_node_lima[0].id
   vpc_security_group_ids      = [aws_security_group.fn_node[0].id]
   iam_instance_profile        = aws_iam_instance_profile.fn_node[0].name
   associate_public_ip_address = true # egress only (no NAT in the default VPC); the SG has no ingress
@@ -119,13 +154,9 @@ resource "aws_instance" "fn_node" {
     delete_on_termination = true
   }
 
-  instance_market_options {
-    market_type = "spot"
-    spot_options {
-      spot_instance_type             = "persistent"
-      instance_interruption_behavior = "stop"
-    }
-  }
+  # On-demand: las Local Zones normalmente no ofrecen mercado Spot (no había tipos de instancia listados en
+  # us-east-1-lim-1a antes del opt-in); además una interrupción Spot habría tirado el túnel FortiGate justo
+  # cuando el estudio ya confía en esta IP fija.
 
   user_data_replace_on_change = true
   user_data                   = <<-EOT
@@ -199,4 +230,9 @@ resource "aws_instance" "fn_node" {
 
 output "fn_node_instance_id" {
   value = try(aws_instance.fn_node[0].id, null)
+}
+
+output "fn_node_static_ip" {
+  description = "IP fija del nodo (dásela a la TI del estudio para su regla del FortiGate)."
+  value       = try(aws_eip.fn_node[0].public_ip, null)
 }
