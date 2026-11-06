@@ -135,6 +135,7 @@ mismo comando pide al servidor qué partes ya tiene y solo envía las que faltan
 | `CAPSULE_OBJSTORE_DIR` | directorio de datos (compose: `/data/objstore`). **Vacío = almacén deshabilitado** y `storage create` aprovisiona buckets de AWS como antes. |
 | `CAPSULE_OBJSTORE_ADDR` | oyente S3 dedicado, `:9000` por omisión. Sin plazos de lectura/escritura (subidas grandes). |
 | `CAPSULE_OBJSTORE_INTERNAL_ENDPOINT` | `http://host.docker.internal:9000` |
+| `CAPSULE_OBJSTORE_PUBLIC_ENDPOINT` | opcional: plantilla del endpoint público, con `{slug}` (por omisión `https://{slug}-storage.<CAPSULE_APPS_DOMAIN>`); pruebas locales: `http://localhost:9000` |
 | `CAPSULE_OBJSTORE_DEFAULT_PROJECT_BYTES`, `CAPSULE_OBJSTORE_DEFAULT_ORG_BYTES` | cuotas por omisión (0 o vacío = sin límite) |
 
 Despliegue: el cambio es un backend nuevo (migración `000074_objstore`, volumen `capsule-objstore`, puerto 9000, bloque
