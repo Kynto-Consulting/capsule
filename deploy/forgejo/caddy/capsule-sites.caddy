@@ -57,12 +57,20 @@
 # lo renueva: tras cada renovacion el gancho de acme-issue.sh recarga Caddy (RUNBOOK-alb-removal.md).
 *.{$CAPSULE_APPS_ZONE:apps.tumi-ai.com} {
 	tls {$CAPSULE_WILDCARD_CRT:/certs/wildcard-apps.crt} {$CAPSULE_WILDCARD_KEY:/certs/wildcard-apps.key}
+	# Almacen de objetos propio (API S3): <proyecto>-storage.<zona> va DIRECTO al oyente S3 del backend (sin reescribir la ruta: la firma
+	# SigV4 cubre el path; sin los limites de tiempo del servidor principal para subidas y descargas grandes). docs/OBJECT_STORAGE.md.
+	@storage header_regexp storage Host ^[^.]+-storage\.
+	handle @storage {
+		import capsule_edge {$CAPSULE_OBJSTORE:backend:9000}
+	}
 	# Behind the ALB the dashboard's Next.js rewrite (frontend/next.config.ts) mapped <app>.apps.<zone>/<path> to the backend's
 	# /_proxy/<app>/<path>. Caddy does the same mapping itself (one hop less, WebSocket works). {labels.3} is <app> for a zone of
 	# three labels (apps.tumi-ai.com). The rewrite runs before the /internal block of capsule_edge, so a customer's own /internal/...
 	# path is theirs (it becomes /_proxy/<app>/internal/...) and the backend's /internal/* is unreachable from this site.
-	rewrite * /_proxy/{http.request.host.labels.3}{uri}
-	import capsule_edge {$CAPSULE_BACKEND:backend:8080}
+	handle {
+		rewrite * /_proxy/{http.request.host.labels.3}{uri}
+		import capsule_edge {$CAPSULE_BACKEND:backend:8080}
+	}
 }
 
 # Dominios personalizados de clientes: cualquier otro nombre. El certificado se emite A DEMANDA solo si el backend lo avala

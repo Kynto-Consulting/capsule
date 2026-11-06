@@ -21,6 +21,7 @@ seguridad, entornos con aprobaciones y respaldos. Este archivo solo enruta y fij
 |---|---|
 | Instalar, `capsule login`, tokens `cap_`/`cgt_`, variables de entorno, códigos de salida, IDs cortos, formatos de salida | `references/instalacion-login.md` |
 | Desplegar, verificar, logs, rollback, workers, crons, dominios, escala, storage | `references/despliegue.md` |
+| Almacén de objetos S3 propio: buckets, put/get/ls/rm/presign, claves, cuotas, `S3_*` | `references/almacenamiento-objetos.md` |
 | Variables y secretos por capa (cuenta, proyecto, deploy) | `references/variables-vault.md` |
 | Workflows, `ci init`, runs y logs de CI, secretos de CI, runners, acción de deploy | `references/ci-workflows.md` |
 | Conectarse a una base o servicio con `capsule connect/tunnel/ssh`, `capsule://`, tokens `cgc_`/`cgs_`, exit codes 2-6, puerto aleatorio, límites | `references/gateway.md` |
@@ -28,6 +29,7 @@ seguridad, entornos con aprobaciones y respaldos. Este archivo solo enruta y fij
 | Puertos TCP/UDP extra, lista de IPs de la app, `--my-ip` | `references/puertos-firewall.md` |
 | Acceso externo a bases de datos | `references/bases-acceso-externo.md` |
 | IPv4 e IPv6 (qué se acepta, qué falta activar) | `references/ipv6.md` |
+| Túnel VPN a la red de un cliente (`capsule vpn`), funciones en el túnel (`capsule fn`), `@kyntocg/capsule-fn`, tokens `capfn_` | `references/vpn-funciones.md` |
 | Backups, restauración, `recover`, manifiestos | `references/backups-recuperacion.md` |
 | Git Capsule: clone, ramas, PR, revisión, merge, protección, auto-merge, tokens Git, SSH | `references/git-capsule.md` |
 | Seguridad: alertas, SARIF, Semgrep, Renovate, políticas, supresiones | `references/seguridad.md` |

@@ -71,14 +71,14 @@ capsule crons list|get ID|trigger ID|delete ID ; capsule logs cron --tail 100
 capsule domains add app.ejemplo.com [--type redirect --redirect-to https://...]   # luego mostrar DNS requerido
 capsule domains list ; capsule domains verify <id> ; capsule domains remove <id>
 capsule scale web --replicas 2 --min 1 --max 5 --cpu-threshold 75
-capsule storage create --name assets [--public] ; capsule storage list ; capsule storage presign s3://bucket/clave --expires 3600
+capsule storage create --name assets [--public] ; capsule storage list ; capsule storage put/get/ls/rm/presign   # almacén propio: references/almacenamiento-objetos.md
 capsule email setup --domain ejemplo.com ; capsule email dns ; capsule email test --to a@b.com
 ```
 
 - Los crons ejecutan el comando **dentro del contenedor del proyecto** (pueden leer sus variables). Comandos entre
   comillas simples.
 - Crear o borrar workers/crons es administración: requiere sesión normal, no un token `deploy`.
-- `--public` en `storage create` expone el bucket a lectura pública: pide confirmación.
+- `--public` en `storage create` expone el bucket a lectura pública: pide confirmación. El almacén es el propio de Capsule (no AWS): `references/almacenamiento-objetos.md`.
 - `domains add` no cambia el DNS: el usuario pone los registros que muestra el comando.
 
 ## Exportar e importar

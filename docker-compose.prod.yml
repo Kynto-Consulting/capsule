@@ -8,6 +8,9 @@ services:
     restart: always
     ports:
       - "8080:8080"
+      # Almacen de objetos propio (API S3, docs/OBJECT_STORAGE.md): las apps del mismo servidor llegan por host.docker.internal:9000.
+      # Sin regla en el grupo de seguridad el puerto no es alcanzable desde fuera; el acceso publico va por Caddy (<proyecto>-storage.<zona>).
+      - "9000:9000"
     environment:
       - CAPSULE_ENV=production
       - CAPSULE_PORT=8080
@@ -92,9 +95,16 @@ services:
       - CAPSULE_CLEANUP_KEEP_STORAGE=${CAPSULE_CLEANUP_KEEP_STORAGE:-}
       - CAPSULE_DISK_PATH=${CAPSULE_DISK_PATH:-}
       - CAPSULE_DISK_MAX_PERCENT=${CAPSULE_DISK_MAX_PERCENT:-}
+      # Object store (empty CAPSULE_OBJSTORE_DIR = disabled; `capsule storage create` then uses AWS S3 buckets)
+      - CAPSULE_OBJSTORE_DIR=${CAPSULE_OBJSTORE_DIR:-/data/objstore}
+      - CAPSULE_OBJSTORE_ADDR=${CAPSULE_OBJSTORE_ADDR:-:9000}
+      - CAPSULE_OBJSTORE_INTERNAL_ENDPOINT=${CAPSULE_OBJSTORE_INTERNAL_ENDPOINT:-http://host.docker.internal:9000}
+      - CAPSULE_OBJSTORE_DEFAULT_PROJECT_BYTES=${CAPSULE_OBJSTORE_DEFAULT_PROJECT_BYTES:-}
+      - CAPSULE_OBJSTORE_DEFAULT_ORG_BYTES=${CAPSULE_OBJSTORE_DEFAULT_ORG_BYTES:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds
+      - capsule-objstore:/data/objstore
     depends_on:
       redis:
         condition: service_healthy
@@ -286,6 +296,8 @@ volumes:
   capsule-redis-data:
     driver: local
   capsule-build-cache:
+    driver: local
+  capsule-objstore:
     driver: local
 
 networks:

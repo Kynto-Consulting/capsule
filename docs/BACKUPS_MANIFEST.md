@@ -18,6 +18,7 @@ refuse a schema they do not know. New optional fields may be added without a bum
 | `deployment` | last successful deployment (absent if none): `id`, `version`, `git_sha`, `image_tag`, `image_id`, `image_digests` (RepoDigests), `source_key` (key of the source archive `deployments/<projectID>/<uuid>.tar.gz` in the artifacts bucket), `container_port`, `host_port` |
 | `container` | the app container as it ran (absent if not present): `name` (`capsule-app-<12 hex>`), `image`, `restart_policy`, `networks`, `memory_limit_bytes`, `cpu_limit_nanos`, `published_ports` (`container_port` like `3000/tcp`, `host_port`), `health_test` |
 | `volumes` | named volumes of the app container: `name`, `mount_point` (normally `capsule-data-<projectID>` at `/data`) |
+| `objects` (snapshot kind, not a manifest field) | buckets of the project in Capsule object storage are archived as `projects/<projectID>/objects/...tar.gz.enc` (see `docs/OBJECT_STORAGE.md`); the manifest carries no object data or keys. To rebuild a project restore that snapshot after the volume |
 | `env_var_names` | sorted names of the project's environment variables |
 | `databases[]` | per project database: `id`, `name`, `engine`, `version`, `image`, `db_name`, `host_port`, `container` (`capsule-db-<id>`), `volumes[]`, `restart_policy`, `container_present` |
 

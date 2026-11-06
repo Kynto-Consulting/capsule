@@ -360,6 +360,7 @@ from `CAPSULE_SECRET_KEY` and stored in the object metadata) on top of the bucke
 | `projects/<projectID>/database/<RFC3339>-<runID>.<dbid8>.<ext>.enc` | one dump per project database container: postgres `pg_dump --format=custom` (`pgdump`), mysql/mariadb `mysqldump --single-transaction` (`sql`), mongodb `mongodump --archive --gzip` (`archive.gz`), redis RDB (`rdb`). Streamed with `docker exec` to S3 multipart; the dump never touches the host disk |
 | `projects/<projectID>/volume/<RFC3339>-<runID>.tar.gz.enc` | the project data volume (`capsule-data-<projectID>`, mounted at `/data`) as tar.gz from an ephemeral helper container with the volume read-only |
 | `projects/<projectID>/manifest/<RFC3339>-<runID>.json.enc` | the project manifest (format: `docs/BACKUPS_MANIFEST.md`) |
+| `projects/<projectID>/objects/<RFC3339>-<runID>.tar.gz.enc` | the project's object-store buckets (`docs/OBJECT_STORAGE.md`) as tar.gz, written in-process (no helper container); included with `--volumes`; snapshot kind `objects` |
 | `platform/<RFC3339>-<runID>.files.tar.gz.enc` | compose file(s), `.env` and `certs/` of the install dir, and Docker `daemon.json` |
 | `platform/<RFC3339>-<runID>.inventory.json.enc` | `docker volume ls`, `docker ps -a`, and a summarized `docker inspect` of every container (env var names only) |
 
