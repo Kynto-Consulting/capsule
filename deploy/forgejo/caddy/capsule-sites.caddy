@@ -57,19 +57,49 @@
 # lo renueva: tras cada renovacion el gancho de acme-issue.sh recarga Caddy (RUNBOOK-alb-removal.md).
 *.{$CAPSULE_APPS_ZONE:apps.tumi-ai.com} {
 	tls {$CAPSULE_WILDCARD_CRT:/certs/wildcard-apps.crt} {$CAPSULE_WILDCARD_KEY:/certs/wildcard-apps.key}
-	# Almacen de objetos propio (API S3): <proyecto>-storage.<zona> va DIRECTO al oyente S3 del backend (sin reescribir la ruta: la firma
-	# SigV4 cubre el path; sin los limites de tiempo del servidor principal para subidas y descargas grandes). docs/OBJECT_STORAGE.md.
+	# Este bloque NO importa (capsule_edge): su `log` no puede ir dentro de handle/route y aqui hacen falta dos caminos. Repite lo mismo
+	# (log, sin Server, X-Amzn-Trace-Id, sin cortes de tiempo, bloqueo de /internal) con las dos diferencias de abajo.
+	log {
+		output stderr
+		format json
+	}
+	header -Server
+
+	# Almacen de objetos propio (API S3): <proyecto>-storage.<zona> va DIRECTO al oyente S3 del backend, sin reescribir la ruta (la
+	# firma SigV4 cubre el path) y sin los limites de tiempo del servidor principal (subidas y descargas grandes). Sin `encode`:
+	# no se recomprimen objetos ni respuestas con Range. docs/OBJECT_STORAGE.md
 	@storage header_regexp storage Host ^[^.]+-storage\.
 	handle @storage {
-		import capsule_edge {$CAPSULE_OBJSTORE:backend:9000}
+		reverse_proxy {$CAPSULE_OBJSTORE:backend:9000} {
+			header_up X-Amzn-Trace-Id capsule-edge
+			flush_interval -1
+			transport http {
+				dial_timeout 5s
+				keepalive 2m
+			}
+		}
 	}
+
 	# Behind the ALB the dashboard's Next.js rewrite (frontend/next.config.ts) mapped <app>.apps.<zone>/<path> to the backend's
 	# /_proxy/<app>/<path>. Caddy does the same mapping itself (one hop less, WebSocket works). {labels.3} is <app> for a zone of
-	# three labels (apps.tumi-ai.com). The rewrite runs before the /internal block of capsule_edge, so a customer's own /internal/...
-	# path is theirs (it becomes /_proxy/<app>/internal/...) and the backend's /internal/* is unreachable from this site.
+	# three labels (apps.tumi-ai.com). The rewrite runs before the /internal block, so a customer's own /internal/... path is theirs
+	# (it becomes /_proxy/<app>/internal/...) and the backend's /internal/* is unreachable from this site.
 	handle {
+		encode zstd gzip
 		rewrite * /_proxy/{http.request.host.labels.3}{uri}
-		import capsule_edge {$CAPSULE_BACKEND:backend:8080}
+		route {
+			@internal path_regexp (?i)^/+internal(/|$)
+			respond @internal 404
+			reverse_proxy {$CAPSULE_BACKEND:backend:8080} {
+				header_up X-Amzn-Trace-Id capsule-edge
+				flush_interval -1
+				stream_close_delay 5m
+				transport http {
+					dial_timeout 5s
+					keepalive 2m
+				}
+			}
+		}
 	}
 }
 
