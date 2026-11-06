@@ -197,10 +197,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
 
 # Capsule's API user writes and restores backups. It may delete objects only under projects/*
 # (per-project retention_days); the platform/ prefix is only ever removed by the bucket lifecycle.
-resource "aws_iam_user_policy" "capsule_api_backups" {
+resource "aws_iam_policy" "capsule_api_backups" {
   count = local.backups_on ? 1 : 0
   name  = "${var.app_name}-api-backups"
-  user  = aws_iam_user.capsule_api.name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -225,6 +224,12 @@ resource "aws_iam_user_policy" "capsule_api_backups" {
       },
     ]
   })
+}
+
+resource "aws_iam_user_policy_attachment" "capsule_api_backups" {
+  count      = local.backups_on ? 1 : 0
+  user       = aws_iam_user.capsule_api.name
+  policy_arn = aws_iam_policy.capsule_api_backups[0].arn
 }
 
 output "backups_bucket" {

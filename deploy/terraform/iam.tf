@@ -12,9 +12,8 @@ resource "aws_iam_access_key" "capsule_api" {
   user = aws_iam_user.capsule_api.name
 }
 
-resource "aws_iam_user_policy" "capsule_api" {
+resource "aws_iam_policy" "capsule_api" {
   name = "${var.app_name}-api-policy"
-  user = aws_iam_user.capsule_api.name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -132,6 +131,11 @@ resource "aws_iam_user_policy" "capsule_api" {
       }
     ]
   })
+}
+
+resource "aws_iam_user_policy_attachment" "capsule_api" {
+  user       = aws_iam_user.capsule_api.name
+  policy_arn = aws_iam_policy.capsule_api.arn
 }
 
 # ── Lambda execution role ──────────────────────────────────────────────────────
