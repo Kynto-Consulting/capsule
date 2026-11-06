@@ -65,6 +65,22 @@ En PowerShell los parámetros llevan guion simple y las listas van con comas: `-
   de la LAN simplemente se cierra. `--name` identifica la exposición (no el nombre del túnel); solo el dueño del
   túnel puede usarlo.
 
+## Enrutar todo el tráfico (tunnel-vpn, experimental)
+
+Para no mapear puerto por puerto: `tunnel-vpn --tunnel oficina [--net 192.168.1.0/24]` crea una interfaz de
+red virtual (TUN) **solo en tu máquina** y enruta hacia ella el tráfico destinado a la red compartida; cualquier
+programa (navegador, ssh, un juego) la usa sin configuración. El agente (la máquina que de verdad está en esa
+LAN) no se entera de nada nuevo: sigue usando conexiones normales (`net.Dial`), sin admin ni cambios de su lado.
+Una pila TCP/IP real en espacio de usuario (gVisor) hace el trabajo pesado; no es un simple reenvío de paquetes.
+
+Es un binario y repo Go **aparte** (`cmd/tunnel-vpn` dentro de `D:\Github\Kynto\tunnel`, módulo propio: sus
+dependencias son pesadas y exigen una versión de Go más nueva, por eso no comparte `go.mod` con el servidor ni
+con el cliente normal). Necesita administrador/root **solo en tu máquina** (crear una interfaz de red siempre lo
+pide) y, en Windows, el driver `wintun.dll` (el mismo de WireGuard) junto al `.exe`. Usa la sesión ya guardada
+por `tunnel login` (o `CAPSULE_TUNNEL_TOKEN`); no inicia sesión por su cuenta. Compila (no está integrado en
+el Dockerfile del servicio ni se descarga desde la web todavía, a propósito, hasta probarlo con tráfico real):
+ver `cmd/tunnel-vpn/README.md`. No se verificó contra tráfico real (sin admin disponible al construirlo).
+
 ## Detalles que importan
 
 - UDP: cada datagrama viaja entero; si el lector es lento se pierden datagramas; las sesiones por origen se cierran
