@@ -62,6 +62,19 @@ filtra por país, puede entrar sin que nadie en el estudio toque nada.
 - Se quitó el Spot: las Local Zones normalmente no tienen mercado Spot (antes del opt-in, `describe-instance-type-offerings`
   en `us-east-1-lim-1a` no devolvió ningún tipo de instancia), y una interrupción además tira el túnel FortiGate. El nodo
   ahora es on-demand; el costo por hora en la Local Zone suele ser mayor que en `us-east-1` normal.
+- Catálogo reducido de esta Local Zone, encontrado al aplicar (06-nov-2026): sin `t3.small` (el mínimo es `t3.medium`,
+  por eso `fn_node_instance_type` cambió de default) y sin `gp3` en el volumen raíz (toca `gp2`). Si se cambia el
+  `instance_type` de nuevo, revisar antes con `describe-instance-type-offerings --filters Name=location,Values=us-east-1-lim-1a`.
+- La Elastic IP necesita `network_border_group = "us-east-1-lim-1"`: una EIP normal de `us-east-1` no se puede asociar
+  a una instancia de una Local Zone (`AssociateAddress: OperationNotPermitted`).
+- `data.aws_availability_zones.available` y `data.aws_subnets.default` (`main.tf`) ahora excluyen Local Zones
+  (`filter { name = "zone-type" / "availability-zone" }`): sin eso, el opt-in a Lima metía la subred del nodo en el
+  `for_each` de `ipv6.tf` (reordenaba el índice de TODAS las demás subredes IPv6 de producción, casi las reemplaza)
+  y en el `aws_db_subnet_group` de RDS. Si se opta por otra Local Zone/Wavelength en el futuro, ese filtro ya las cubre.
+- Bug de sangría en el `user_data` (ya corregido): los `cat <<UNIT ... UNIT` anidados dentro del heredoc `<<-EOT` de
+  Terraform conservan la sangría del HCL, y un heredoc de bash sin `<<-` exige el delimitador en la columna 0 — por
+  eso el primer `cat` nunca cerraba y se comía el resto del script (ni el timer de ECR ni la unidad del agente se
+  creaban). Los delimitadores de cierre ahora van sin sangría.
 - Esto reemplaza la instancia existente (subred nueva = recrear, no hay forma de "mover" una instancia de AZ);
   el plan guardado `fn_node.tfplan` quedó obsoleto, hay que generar uno nuevo. Tras el `apply`, el token guardado en
   SSM sigue sirviendo (no cambia), pero el nodo vuelve a aparecer `offline` hasta que el agente levante de nuevo — es

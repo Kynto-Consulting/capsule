@@ -7,8 +7,10 @@ variable "fn_node_enabled" {
 }
 
 variable "fn_node_instance_type" {
+  # t3.small is not offered in us-east-1-lim-1a (Lima Local Zone): describe-instance-type-offerings there starts
+  # at t3.medium (06-nov-2026). Local Zones only carry a subset of the parent region's catalog.
   type    = string
-  default = "t3.small"
+  default = "t3.medium"
 }
 
 variable "fn_node_token_param" {
@@ -53,7 +55,10 @@ resource "aws_subnet" "fn_node_lima" {
 resource "aws_eip" "fn_node" {
   count  = local.fn_node_count
   domain = "vpc"
-  tags   = { Name = "${var.app_name}-fn-node", ManagedBy = "terraform", Component = "fn-node" }
+  # A regular (us-east-1) EIP cannot associate across network border groups (AssociateAddress:
+  # OperationNotPermitted, 06-nov-2026); the address has to come from the Local Zone's own pool.
+  network_border_group = "us-east-1-lim-1"
+  tags                 = { Name = "${var.app_name}-fn-node", ManagedBy = "terraform", Component = "fn-node" }
 }
 
 resource "aws_eip_association" "fn_node" {
@@ -148,8 +153,8 @@ resource "aws_instance" "fn_node" {
   }
 
   root_block_device {
-    volume_type           = "gp3"
-    volume_size           = 30 # the AMI's root snapshot requires at least this much
+    volume_type           = "gp2" # gp3 is not offered in this Local Zone (RunInstances: VolumeTypeNotAvailableInZone, 06-nov-2026)
+    volume_size           = 30    # the AMI's root snapshot requires at least this much
     encrypted             = true
     delete_on_termination = true
   }
@@ -190,13 +195,17 @@ resource "aws_instance" "fn_node" {
     # Function images may live in this account's own ECR (capsule fn deploy --image <acct>.dkr.ecr...): refresh the
     # docker login before the 12h token expires. A function image on Docker Hub or another public registry needs
     # none of this; `docker run` already pulls those without any login.
+    # El delimitador de un heredoc de bash tiene que ir en la columna 0: con `<<-EOT` Terraform solo le quita la
+    # sangría común al bloque entero, así que "UNIT" aquí adentro conserva los 4 espacios del HCL y bash nunca
+    # lo reconocía como cierre (el heredoc se comía todo lo que seguía hasta el fin del script, 06-nov-2026: así
+    # nunca se crearon ni el timer de ECR ni la unidad del agente). systemd ignora la sangría del resto del archivo.
     cat >/etc/systemd/system/capsule-ecr-login.service <<UNIT
     [Unit]
     Description=Refresh this node's docker login to this account's ECR
     [Service]
     Type=oneshot
     ExecStart=/bin/bash -c 'aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com'
-    UNIT
+UNIT
     cat >/etc/systemd/system/capsule-ecr-login.timer <<UNIT
     [Unit]
     Description=Run capsule-ecr-login every 6 hours
@@ -205,7 +214,7 @@ resource "aws_instance" "fn_node" {
     OnUnitActiveSec=6h
     [Install]
     WantedBy=timers.target
-    UNIT
+UNIT
     systemctl daemon-reload && systemctl enable --now capsule-ecr-login.timer
 
     # 'UNIT' entre comillas: sin ellas bash expandía $(aws ssm get-parameter ...) al crear el nodo, antes de existir el token, y
@@ -221,7 +230,7 @@ resource "aws_instance" "fn_node" {
     RestartSec=5
     [Install]
     WantedBy=multi-user.target
-    UNIT
+UNIT
     systemctl daemon-reload && systemctl enable --now capsule-fn-agent
   EOT
 
