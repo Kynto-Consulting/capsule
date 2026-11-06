@@ -29,3 +29,27 @@ capsule storage quota [--project-max 50GB] [--org-max 1TB] ; capsule storage del
   buckets del proyecto: confirma con el usuario.
 - Permisos: leer/listar `storage:read`; crear, borrar, rotar, cambiar el tope de proyecto `storage:manage`; subir/firmar/borrar
   objetos `storage:presign`. Un token `deploy` no administra buckets.
+
+## SFTP (`sftp`, `scp`, WinSCP, FileZilla)
+
+Fuente: sección SFTP de `docs/OBJECT_STORAGE.md`. El bucket se ve como un árbol de carpetas (prefijos con `/`); no hay puerto público:
+se entra por el gateway, como el servicio `sftp` del proyecto (`capsule://<proyecto>/sftp`, aparece solo si el proyecto tiene buckets).
+
+```bash
+capsule storage sftp archivos                 # abre sftp por el gateway (binario nativo + OpenSSH)
+capsule storage sftp archivos --print         # guía: sftp, scp, ~/.ssh/config, WinSCP, FileZilla
+capsule storage ssh-keys add archivos --file ~/.ssh/id_ed25519.pub [--name portatil]
+capsule storage ssh-keys list archivos ; capsule storage ssh-keys rm archivos portatil
+sftp -o ProxyCommand="capsule connect --stdio capsule://mi-proyecto/sftp" -o HostKeyAlias=mi-proyecto-sftp.capsule <bucket>@mi-proyecto-sftp.capsule
+```
+
+- Usuario = nombre del bucket (o `<proyecto>-<nombre>`, o la clave de acceso); contraseña = el **secreto** del bucket, o una clave pública SSH
+  registrada para él (ed25519, ecdsa, RSA ≥ 2048; máx. 20). Rotar el bucket cambia también la contraseña SFTP. No pegues el secreto en chat.
+- WinSCP: proxy tipo «Local» con `capsule connect --stdio capsule://<proyecto>/sftp`. FileZilla: `capsule tunnel <proyecto>/sftp --listen 127.0.0.1:2222`
+  y conectar a ese puerto. Una app del mismo servidor usa `host.docker.internal:2222`.
+- Subidas reanudables (`reput`, «reanudar» de FileZilla): un corte deja el objeto parcial y se continúa desde su tamaño; si la subida
+  sobrescribía un objeto, el anterior se conserva. `rename` mueve objetos sin copiar bytes; `mkdir` crea un marcador `carpeta/`.
+- Mismas cuotas y reservas atómicas que la API S3: al pasarse, error `quota exceeded` y no queda nada a medias. Un bucket `--public` sigue siendo
+  de lectura anónima solo por HTTP; por SFTP siempre hace falta secreto o clave.
+- Sin shell, exec, reenvío de puertos ni agente; sin enlaces simbólicos; 10 min de inactividad, 40 MiB/s por conexión, 8 conexiones por bucket.
+- Permisos: ver las claves `storage:read`; registrarlas o quitarlas `storage:manage`.

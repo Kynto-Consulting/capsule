@@ -84,6 +84,7 @@ No hace falta ningún registro DNS nuevo: `*.apps.tumi-ai.com` ya apunta al serv
 **Gateway (`capsule://`).** El almacén se expone por el host con TLS de arriba, que es HTTP estándar y no necesita túnel; no se
 registra como servicio del gateway (el gateway enruta TCP/UDP con encabezado propio, innecesario para un endpoint HTTPS con
 firma). Quien quiera igualmente un nombre `capsule://proyecto/almacen` debe registrar un servicio `http` hacia el 9000.
+Lo que sí va por el gateway es el **SFTP** (sección SFTP): servicio `sftp` del proyecto.
 
 **Puerto 9000.** `docker-compose.prod.yml` lo publica para `host.docker.internal`. El grupo de seguridad del host no lo abre
 (como los puertos de bases sin regla): desde fuera solo se llega por el 443 de Caddy. No abrir el 9000 al exterior.
@@ -126,8 +127,122 @@ mismo comando pide al servidor qué partes ya tiene y solo envía las que faltan
 `POST|GET /orgs/{o}/projects/{p}/storage`, `GET|PATCH|DELETE …/storage/{id}`, `POST …/{id}/presign {key, method, expires}`,
 `POST …/{id}/rotate`, `GET|DELETE …/{id}/objects`, `POST …/{id}/uploads {key,size,part_size,upload_id?}`,
 `GET …/{id}/uploads/{uid}`, `POST …/{id}/uploads/{uid}/complete {parts}`, `DELETE …/{id}/uploads/{uid}`,
+`GET|POST …/{id}/ssh-keys`, `DELETE …/{id}/ssh-keys/{id|nombre|huella}` (claves SSH del SFTP),
 `GET|PUT …/storage/quota`, `GET|PUT /orgs/{o}/storage/quota`.
 
+## SFTP
+
+Para entrar a los buckets con `sftp`, `scp`, WinSCP o FileZilla. Es un servidor SSH propio (`golang.org/x/crypto/ssh` +
+`github.com/pkg/sftp`, paquete `backend/internal/objstore/sftpd`) que corre **dentro del backend**, delante del mismo motor y de
+las mismas reservas atómicas de cuota que la API S3. No abre un puerto público: lo alcanzan el gateway y las apps del mismo servidor.
+
+### Cómo se entra
+
+| Quién | Cómo |
+| --- | --- |
+| Persona (PC) | por el gateway, como servicio `sftp` del proyecto (`capsule://<proyecto>/sftp`): `capsule storage sftp <bucket>`, o `sftp`/`scp` con `ProxyCommand` (abajo). |
+| App en el mismo servidor | `host.docker.internal:2222` (puerto publicado del oyente, igual que el 9000). Mismo usuario y contraseña. |
+
+El servicio `sftp` aparece solo: cuando el proyecto tiene al menos un bucket del almacén propio, el gateway lo crea (protocolo `ssh`,
+acceso por gateway activo, **sin** puerto directo abierto) la primera vez que se lista o se resuelve un servicio del proyecto
+(por ejemplo con `capsule connect capsule://<proyecto>/sftp`); desaparece con el último bucket. Si el proyecto ya
+tiene un servicio propio llamado `sftp`, no se toca. No hace falta ningún DNS nuevo.
+
+**Credenciales.** Usuario = nombre del bucket (`<proyecto>-<org>-<nombre>`), o `<proyecto>-<nombre>`, o la clave de acceso. Contraseña =
+el **secreto** del bucket (`capsule storage show <bucket> --reveal`; rotar el secreto lo cambia también para SFTP) **o** una clave pública SSH
+registrada para ese bucket:
+
+```bash
+capsule storage ssh-keys add archivos --file ~/.ssh/id_ed25519.pub [--name portatil]
+capsule storage ssh-keys list archivos
+capsule storage ssh-keys rm archivos portatil
+```
+
+Claves aceptadas: ed25519, ecdsa, RSA de 2048 bits o más y llaves FIDO (`sk-…`); sin certificados ni opciones (`command=`). Hasta 20 por
+bucket. Quitar una clave surte efecto en segundos (caché de 3 s). No existen usuarios del sistema operativo ni acceso al disco: el
+servidor solo ve el bucket.
+
+### Comandos
+
+```bash
+capsule storage sftp archivos                 # abre sftp por el gateway
+capsule storage sftp archivos --print         # guía completa (sftp, scp, ssh_config, WinSCP, FileZilla; también está en el panel)
+sftp -o ProxyCommand="capsule connect --stdio capsule://mi-proyecto/sftp" -o HostKeyAlias=mi-proyecto-sftp.capsule \
+     mi-proyecto-mi-org-archivos@mi-proyecto-sftp.capsule
+scp  -o ProxyCommand="capsule connect --stdio capsule://mi-proyecto/sftp" -o HostKeyAlias=mi-proyecto-sftp.capsule \
+     ./informe.pdf mi-proyecto-mi-org-archivos@mi-proyecto-sftp.capsule:/2026/informe.pdf
+```
+
+Con `capsule ssh` el mismo servicio sirve como subsistema: `capsule ssh mi-proyecto/sftp -l <bucket> -- -s sftp`. Para no repetir las
+opciones, `capsule ssh mi-proyecto/sftp -l <bucket> --print` imprime un bloque de `~/.ssh/config`; después basta `sftp mi-proyecto-sftp.capsule`.
+
+- **WinSCP:** Nuevo sitio > protocolo SFTP > servidor `mi-proyecto-sftp.capsule`, puerto 22, usuario = bucket, contraseña = secreto. En
+  Avanzado > Conexión > Proxy: tipo «Local» y comando `"C:\ruta\capsule.exe" connect --stdio capsule://mi-proyecto/sftp`.
+- **FileZilla:** no admite comando de proxy. Abrir `capsule tunnel mi-proyecto/sftp --listen 127.0.0.1:2222` y conectar a
+  `127.0.0.1:2222` (protocolo SFTP, tipo de acceso Normal, usuario = bucket, contraseña = secreto).
+- Clave de host: es fija (guardada en el volumen del almacén, `/data/objstore/.sftp/host_ed25519`, y no cambia al reiniciar ni al
+  redesplegar). La huella `SHA256:…` sale en `capsule storage show`, en `capsule storage sftp --print`, en el panel y en el registro de arranque del backend. Con
+  `HostKeyAlias` cada proyecto guarda la suya en `known_hosts`.
+
+### Qué hace cada operación
+
+El bucket es un árbol de carpetas: una carpeta es un prefijo terminado en `/`; `mkdir` crea el marcador `carpeta/` (objeto vacío, como la
+consola de S3) y las carpetas con objetos existen sin marcador.
+
+| SFTP | Efecto |
+| --- | --- |
+| `ls`, `stat` | lista por páginas del índice ordenado (carpetas de millones de objetos sin cargarlas enteras) |
+| `get`, lectura de rangos | `ReadAt` sobre el archivo del objeto: cualquier rango, descargas reanudables (`reget`, FileZilla) |
+| `put`, escritura por trozos | las escrituras (en cualquier orden y en paralelo) se ensamblan en un archivo de trabajo del bucket (`.sftp/`, invisible y fuera del respaldo de objetos) y al cerrar se publican como **un** objeto, de forma atómica |
+| reanudar (`reput`, FileZilla) | una subida cortada por la red deja el objeto parcial (si la clave no existía); abrir sin truncar parte de los bytes guardados, así `reput`/«reanudar» continúa desde el tamaño remoto. Una subida que **sobrescribía** un objeto y se corta conserva el anterior |
+| `rm` | borra el objeto (no borra carpetas) |
+| `rename` | mueve objetos dentro del bucket **sin copiar los bytes** (reemplaza el destino de forma atómica); una carpeta se renombra objeto a objeto |
+| `mkdir`, `rmdir` | marcador de prefijo; `rmdir` solo si está vacía |
+| `chmod`, `chown`, fecha | se aceptan y se ignoran (los clientes los envían tras subir); `symlink`, `link`, `readlink`: no existen |
+
+**Cuotas.** Cada escritura que hace crecer el archivo reserva sus bytes con la misma comprobación atómica de la API S3 (bucket, proyecto y
+organización, contando lo que otras subidas ya reservaron), así que dos subidas simultáneas no pasan por el mismo espacio libre. Al pasarse,
+la escritura falla con `quota exceeded: the storage quota of this bucket, project or organization is exhausted`, no se publica nada a medias y la
+reserva se libera al instante. Sobrescribir un objeto solo necesita la diferencia. Un bucket público (`--public`) sigue siendo de lectura
+anónima solo por la API S3/HTTP; SFTP nunca admite acceso anónimo: siempre hace falta secreto o clave, y con ellos se lee y se escribe como en la API.
+
+### Seguridad
+
+- Solo el subsistema `sftp`: se rechazan `shell`, `exec`, `pty-req`, `env`, `x11-req`, agente (`auth-agent-req`), `direct-tcpip`,
+  `tcpip-forward` y cualquier otro subsistema.
+- Aislamiento: la sesión está atada al bucket de su inicio de sesión; la ruta se normaliza como cadena contra `/` (`..` y las rutas
+  absolutas nunca salen del bucket) y ninguna ruta llega al sistema de archivos del host (los objetos se direccionan por hash de la clave).
+  Hay pruebas de aislamiento entre buckets y de escape de ruta.
+- Límites (todos configurables, valores por omisión): 128 conexiones en total, 64 por dirección de origen (detrás del gateway comparten una),
+  8 por bucket, 64 archivos abiertos por conexión, 4 intentos de autenticación por conexión, 10 fallos por (origen, usuario) cada 5 min
+  antes de bloquear y 400 ms de pausa en cada fallo (igual para un usuario inexistente que para un secreto equivocado), 20 s para terminar el
+  inicio de sesión, **10 min de inactividad**, **40 MiB/s por conexión y 120 MiB/s en total** en cada sentido, paquetes SFTP de como máximo 256 KiB
+  (la conexión se cierra con uno mayor).
+- Auditoría por el mismo camino que el resto del almacén (el registro estructurado del backend, `slog`): `sftp login`, `sftp login failed`,
+  `sftp disconnect` (con bytes y duración), y por objeto `sftp write` (clave, tamaño, ETag), `sftp read`, `sftp delete`, `sftp rename`,
+  `sftp mkdir`, `sftp rmdir`, `sftp quota exceeded`; las claves SSH registradas o quitadas se registran como `storage ssh key added|removed`.
+
+### Variables del servidor (SFTP)
+
+| Variable | Valor / efecto |
+| --- | --- |
+| `CAPSULE_OBJSTORE_SFTP_ADDR` | oyente SFTP, `:2222` por omisión; `off` lo desactiva |
+| `CAPSULE_OBJSTORE_SFTP_INTERNAL` | dirección que ven las apps: `host.docker.internal:<puerto>` por omisión |
+| `CAPSULE_OBJSTORE_SFTP_HOSTKEY` | ruta de la clave de host (por omisión `<CAPSULE_OBJSTORE_DIR>/.sftp/host_ed25519`) |
+| `CAPSULE_SFTP_MAX_CONNS`, `CAPSULE_SFTP_MAX_CONNS_PER_BUCKET` | conexiones en total (128) y por bucket (8) |
+| `CAPSULE_SFTP_IDLE` | inactividad, formato Go (`10m`) |
+| `CAPSULE_SFTP_CONN_BPS`, `CAPSULE_SFTP_TOTAL_BPS` | bytes por segundo por conexión (41943040) y total (125829120); negativo = sin límite |
+| `CAPSULE_SFTP_MAX_OBJECT_BYTES` | tamaño máximo de un objeto subido por SFTP (0 = solo mandan las cuotas) |
+
+El gateway lee `CAPSULE_OBJSTORE_SFTP_ADDR` para saber a qué puerto del host enrutar (el mismo `CAPSULE_GW_DEST_HOST` que usa para los puertos de las bases).
+
+### Despliegue del SFTP
+
+Un backend nuevo, sin recrear el gateway: migración `000075_objstore_ssh_keys` (tabla `objstore_ssh_keys`; si la rama de funciones/VPN también trae un
+`000075`, la que se una después renumera a `000076`), puerto 2222 publicado en `docker-compose.prod.yml` (`- "2222:2222"`, variables
+`CAPSULE_OBJSTORE_SFTP_*` opcionales), **sin** regla en el grupo de seguridad (como el 9000). El binario del backend se compila en el PC y
+se arma la imagen mínima en el host; el gateway no se recrea: el servicio `sftp` se crea solo en la base y el plano de datos lo toma por la
+sincronización normal de rutas. Compose solo se aplica al servicio `backend` (`up -d backend`), nunca al `capsule-gateway`.
 ## Configuración del servidor
 
 | Variable | Valor / efecto |
