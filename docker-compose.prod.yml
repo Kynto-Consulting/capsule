@@ -11,6 +11,9 @@ services:
       # Almacen de objetos propio (API S3, docs/OBJECT_STORAGE.md): las apps del mismo servidor llegan por host.docker.internal:9000.
       # Sin regla en el grupo de seguridad el puerto no es alcanzable desde fuera; el acceso publico va por Caddy (<proyecto>-storage.<zona>).
       - "9000:9000"
+      # SFTP del almacen (docs/OBJECT_STORAGE.md, seccion SFTP): lo alcanzan el gateway (servicio sftp del proyecto) y las apps del mismo servidor
+      # por host.docker.internal:2222. Igual que el 9000: sin regla en el grupo de seguridad no se llega desde fuera.
+      - "2222:2222"
     environment:
       - CAPSULE_ENV=production
       - CAPSULE_PORT=8080
@@ -101,6 +104,8 @@ services:
       - CAPSULE_OBJSTORE_INTERNAL_ENDPOINT=${CAPSULE_OBJSTORE_INTERNAL_ENDPOINT:-http://host.docker.internal:9000}
       - CAPSULE_OBJSTORE_DEFAULT_PROJECT_BYTES=${CAPSULE_OBJSTORE_DEFAULT_PROJECT_BYTES:-}
       - CAPSULE_OBJSTORE_DEFAULT_ORG_BYTES=${CAPSULE_OBJSTORE_DEFAULT_ORG_BYTES:-}
+      # SFTP del almacen ("off" lo desactiva); el gateway lee la misma variable para saber a que puerto del host enrutar
+      - CAPSULE_OBJSTORE_SFTP_ADDR=${CAPSULE_OBJSTORE_SFTP_ADDR:-:2222}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - capsule-build-cache:/tmp/capsule-builds
