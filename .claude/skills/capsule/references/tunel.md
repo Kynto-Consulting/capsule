@@ -27,6 +27,8 @@ tunnel trace   --tunnel oficina --host 192.168.1.67 [--hops 30]           # trac
 tunnel arp     --tunnel oficina                                          # cache ARP del agente (pasivo, no sondea)
 tunnel dns     --tunnel oficina --dns-server 192.168.1.1 servidor.local   # resuelve con el DNS de esa LAN, no el tuyo
 tunnel expose  --tunnel oficina --name db --local 127.0.0.1:5432 --remote-port 19090   # al revés: tu puerto, visible en esa LAN
+tunnel share   --name fotos --folder ./fotos --public             # comparte una carpeta, lectura y escritura (WebDAV, como FTP)
+tunnel share   --name fotos --pick-folder --public --readonly     # sin ruta: abre el selector de carpetas del sistema
 tunnel install --name mi-pc --service db=5432     # vuelve solo (tarea programada, systemd de usuario o LaunchAgent)
 tunnel uninstall --name mi-pc
 tunnel release --name mi-pc                        # desconecta y libera el nombre
@@ -64,6 +66,18 @@ En PowerShell los parámetros llevan guion simple y las listas van con comas: `-
   `tunnel expose` mantiene abiertas (`/ws/expose`, 2 a la vez); si no hay ninguna esperando, esa conexión del lado
   de la LAN simplemente se cierra. `--name` identifica la exposición (no el nombre del túnel); solo el dueño del
   túnel puede usarlo.
+- `--folder` comparte una carpeta local completa por WebDAV (no solo HTTP de lectura): quien se conecta puede
+  montarla como una carpeta normal de Windows o Linux y subir, bajar, renombrar o borrar archivos — sin cliente FTP,
+  sin admin en ninguno de los dos lados (montar una dirección WebDAV nunca lo pide). `--readonly` quita la escritura.
+  `--pick-folder` reemplaza a `--folder <ruta>`: si no se sabe o no se quiere escribir la ruta a mano, abre el
+  selector nativo del sistema (PowerShell en Windows, zenity/kdialog en Linux, `osascript` en macOS) y usa lo elegido.
+  Montaje del lado de quien consume — `tunnel help` trae el detalle:
+  - Windows (sin admin): con `--public`, Explorador de archivos > "Agregar una ubicación de red" >
+    `https://tunnel.apps.tumi-ai.com/t/<nombre>/` (puerto 443, lo entiende el redirector de WebDAV de Windows).
+    Sin `--public`: `tunnel connect --tunnel <nombre> --map web=18080` y luego `net use Z: \\127.0.0.1@18080\DavWWWRoot\`.
+  - Linux (sin root, vía GVFS): Nautilus/Dolphin > "Conectar a servidor" > `dav://127.0.0.1:18080/` (o `davs://.../t/<nombre>/`
+    para un túnel `--public`); `davfs2`/`rclone mount` también sirven como alternativa.
+  - Solo está en el cliente Go (lo que bajan CMD/Linux/macOS); `tunnel.ps1` (PowerShell) todavía no lo implementa.
 
 ## Enrutar todo el tráfico (tunnel-vpn, experimental)
 
